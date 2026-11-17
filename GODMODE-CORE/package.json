@@ -1,0 +1,31 @@
+{
+  "name": "godmode-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo independente GODMODE: API, agentes, provedores e receptor MCP genérico.",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/smoke.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "openai": "^7.57.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

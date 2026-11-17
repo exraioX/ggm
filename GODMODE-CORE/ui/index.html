@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1118">
+  <title>GODMODE CORE</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">G</div>
+        <div><div class="brand-title">GODMODE</div><div class="brand-subtitle">CORE · AMBIENTE LOCAL</div></div>
+      </div>
+      <div class="workspace-label">ESPAÇO DE TRABALHO</div>
+      <nav class="main-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="chat"><span class="nav-icon">◈</span> Conversas</button>
+        <button class="nav-item" data-view="providers"><span class="nav-icon">⌘</span> Provedores de IA</button>
+        <button class="nav-item" data-view="mcp"><span class="nav-icon">⌁</span> Integrações MCP</button>
+        <button class="nav-item" data-view="memory"><span class="nav-icon">▤</span> Memória</button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> Sistema</button>
+      </nav>
+      <div class="sidebar-divider"></div>
+      <div class="conversation-heading"><span>CONVERSAS RECENTES</span><button id="new-chat-side" class="icon-button" title="Nova conversa">＋</button></div>
+      <div id="conversation-list" class="conversation-list"></div>
+      <div class="sidebar-bottom">
+        <span id="gateway-indicator" class="status-dot"></span>
+        <div><div class="sidebar-status">Núcleo local</div><div id="gateway-status" class="sidebar-meta">Verificando conexão…</div></div>
+        <span class="local-lock" title="Acesso restrito ao computador local">⌑</span>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div><div id="breadcrumb" class="breadcrumb">GODMODE CORE / CONVERSAS</div><h1 id="page-title">Conversas</h1></div>
+        <div class="topbar-actions"><span class="local-badge"><span class="status-dot"></span> EXECUÇÃO LOCAL</span><a class="button secondary small original-link" href="http://localhost:3000" target="_blank" rel="noreferrer">Abrir G0DM0D3 ↗</a><button id="new-chat-top" class="button primary small">＋ Nova conversa</button></div>
+      </header>
+
+      <section id="view-chat" class="view active">
+        <div class="chat-toolbar">
+          <div class="chat-title-wrap"><div class="chat-orb">✳</div><div><div id="active-chat-title" class="chat-title">Nova conversa</div><div class="chat-subtitle">As mensagens ficam salvas neste navegador.</div></div></div>
+          <div class="chat-controls"><label class="inline-label" for="chat-provider">MODELO</label><select id="chat-provider" class="select compact"></select><label class="toggle-label"><input id="tools-toggle" type="checkbox" checked><span class="toggle"></span><span>Ferramentas MCP</span></label></div>
+        </div>
+        <div id="chat-empty" class="empty-state">
+          <div class="empty-symbol">✳</div>
+          <h2>Um espaço de trabalho independente.</h2>
+          <p>Converse com modelos locais ou provedores externos. Conecte ferramentas MCP e permita que o agente as use com aprovação.</p>
+          <div class="quick-prompts"><button class="prompt-card" data-prompt="Analise a estrutura do workspace e resuma os principais componentes."><span>⌕</span><strong>Explorar projeto</strong><small>Entenda a estrutura do código</small></button><button class="prompt-card" data-prompt="Ajude-me a planejar uma melhoria neste projeto. Primeiro investigue e apresente um plano, sem modificar arquivos."><span>◫</span><strong>Planejar melhoria</strong><small>Investigue antes de alterar</small></button></div>
+        </div>
+        <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+        <div id="approval-panel" class="approval-panel" hidden></div>
+        <form id="chat-form" class="composer">
+          <textarea id="chat-input" rows="1" placeholder="Escreva sua mensagem… (Enter envia, Shift + Enter quebra linha)" aria-label="Mensagem"></textarea>
+          <div class="composer-footer"><div class="composer-hints"><span>⟡ O agente pede aprovação antes de alterar arquivos ou executar comandos.</span></div><button id="send-button" class="button primary send-button" type="submit"><span>Enviar</span><span>↑</span></button></div>
+        </form>
+      </section>
+
+      <section id="view-providers" class="view">
+        <div class="view-intro"><div><h2>Conecte seus modelos</h2><p>O núcleo aceita APIs compatíveis com OpenAI, servidores locais e provedores hospedados.</p></div><button id="add-provider" class="button secondary">＋ Adicionar provedor</button></div>
+        <div id="provider-cards" class="provider-grid"></div>
+        <div id="provider-form-wrap" class="panel provider-form-wrap" hidden>
+          <div class="panel-heading"><div><h3 id="provider-form-title">Configurar provedor</h3><p>Chaves ficam apenas na memória do processo do núcleo; não são gravadas no arquivo de configuração.</p></div><button id="close-provider-form" class="icon-button">×</button></div>
+          <form id="provider-form" class="form-grid">
+            <label>Identificador<input id="provider-id" required placeholder="ollama, lmstudio, openrouter"></label>
+            <label>Nome de exibição<input id="provider-name" required placeholder="Meu modelo local"></label>
+            <label>Tipo<select id="provider-kind"><option value="openai-compatible">API compatível com OpenAI</option><option value="openrouter">OpenRouter</option></select></label>
+            <label>Endereço base<input id="provider-url" required placeholder="http://127.0.0.1:11434/v1"></label>
+            <label class="span-two">Identificador do modelo<input id="provider-model" placeholder="qwen3:8b ou organização/modelo"></label>
+            <label class="span-two">Chave da API (opcional para modelos locais)<input id="provider-secret" type="password" autocomplete="off" placeholder="A chave não será persistida em disco"></label>
+            <div class="form-actions span-two"><button id="discover-models" type="button" class="button secondary">↻ Buscar modelos</button><button type="submit" class="button primary">Salvar provedor</button></div>
+            <div id="discovered-models" class="span-two model-list"></div>
+          </form>
+        </div>
+      </section>
+
+      <section id="view-mcp" class="view">
+        <div class="view-intro"><div><h2>Receptor universal MCP</h2><p>Importe a configuração <code>mcpServers</code> do Claude Desktop ou cadastre qualquer servidor compatível com MCP.</p></div><span class="protocol-pill">STDIO · STREAMABLE HTTP · SSE</span></div>
+        <div class="panel import-panel">
+          <div class="panel-heading"><div><h3>Importar configuração</h3><p>O conteúdo é validado e salvo em <code>~/.godmode/mcp-servers.json</code>.</p></div><label class="button secondary file-button">Abrir JSON<input id="mcp-file" type="file" accept="application/json,.json" hidden></label></div>
+          <textarea id="mcp-config" class="code-input" spellcheck="false" aria-label="Configuração MCP JSON" placeholder='{
+  "mcpServers": {
+    "meu-servidor": {
+      "command": "npx",
+      "args": ["-y", "pacote-mcp"],
+      "env": {},
+      "cwd": "C:/Projetos/meu-projeto"
+    },
+    "servidor-remoto": {
+      "url": "https://exemplo.com/mcp",
+      "transport": "streamable-http",
+      "headers": { "Authorization": "Bearer ${MINHA_CHAVE}" }
+    }
+  }
+}'></textarea>
+          <div class="import-footer"><span>Use <code>${NOME_DA_VARIAVEL}</code> para referenciar variáveis de ambiente sem gravar tokens no JSON.</span><button id="import-mcp" class="button primary">Validar e importar</button></div>
+          <div id="mcp-import-feedback" class="feedback" aria-live="polite"></div>
+        </div>
+        <div class="section-heading"><div><h3>Servidores configurados</h3><p>Conecte somente os servidores que reconhece e deseja executar.</p></div><button id="connect-all-mcp" class="button secondary small">Conectar habilitados</button></div>
+        <div id="mcp-server-list" class="mcp-server-grid"></div>
+        <div class="panel tools-panel"><div class="panel-heading"><div><h3>Ferramentas descobertas</h3><p>Ferramentas sem indicação confiável de leitura exigem aprovação antes de executar.</p></div><span id="tools-count" class="count-pill">0 ferramentas</span></div><div id="mcp-tools-list" class="tools-list"><div class="empty-inline">Conecte um servidor MCP para descobrir suas ferramentas.</div></div></div>
+        <div class="capability-grid">
+          <div class="panel"><div class="panel-heading"><div><h3>Recursos MCP</h3><p>Conteúdos publicados pelos servidores, que podem ser lidos sob demanda.</p></div><span id="resources-count" class="count-pill">0 recursos</span></div><div id="mcp-resources-list" class="capability-list"><div class="empty-inline">Nenhum recurso anunciado.</div></div></div>
+          <div class="panel"><div class="panel-heading"><div><h3>Prompts MCP</h3><p>Modelos de prompt oferecidos pelos servidores, sem inserção automática na conversa.</p></div><span id="prompts-count" class="count-pill">0 prompts</span></div><div id="mcp-prompts-list" class="capability-list"><div class="empty-inline">Nenhum prompt anunciado.</div></div></div>
+        </div>
+        <div id="mcp-output-panel" class="panel mcp-output-panel" hidden><div class="panel-heading"><div><h3 id="mcp-output-title">Resultado MCP</h3><p>Conteúdo retornado pelo servidor selecionado.</p></div><button id="close-mcp-output" type="button" class="button secondary small">Fechar</button></div><pre id="mcp-output-body" class="mcp-output-body"></pre></div>
+      </section>
+
+      <section id="view-memory" class="view">
+        <div class="view-intro"><div><h2>Memória persistente</h2><p>Notas e decisões ficam no perfil local e podem orientar conversas futuras, independentemente da interface.</p></div></div>
+        <div class="memory-layout">
+          <div class="panel memory-form-panel"><div class="panel-heading"><div><h3>Nova memória</h3><p>Registre decisões estáveis, contexto de projetos ou preferências de trabalho.</p></div></div><form id="memory-form" class="stack-form"><label>Título<input id="memory-title" required maxlength="120" placeholder="Arquitetura atual do projeto"></label><label>Categoria<select id="memory-category"><option>Projeto</option><option>Decisão</option><option>Preferência</option><option>Referência</option></select></label><label>Conteúdo<textarea id="memory-content" required maxlength="6000" rows="6" placeholder="Descreva a informação que será útil em outras sessões…"></textarea></label><button class="button primary" type="submit">Salvar memória</button></form></div>
+          <div class="memory-list-wrap"><div class="section-heading"><div><h3>Memórias salvas</h3><p id="memory-count">Carregando…</p></div></div><div id="memory-list" class="memory-list"></div></div>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <div class="view-intro"><div><h2>Estado do sistema</h2><p>Diagnóstico do núcleo independente e informações de integração.</p></div><button id="refresh-system" class="button secondary">↻ Atualizar</button></div>
+        <div id="system-overview" class="system-grid"></div>
+        <div class="panel api-panel"><div class="panel-heading"><div><h3>API compatível com OpenAI</h3><p>Permite usar o GODMODE CORE em outros clientes locais que aceitam um endpoint OpenAI-compatible.</p></div><span class="protocol-pill">REST + CHAT COMPLETIONS</span></div><div class="endpoint-row"><div><small>ENDPOINT</small><code id="openai-endpoint">http://127.0.0.1:8765/v1</code></div><button id="copy-endpoint" class="button secondary small">Copiar</button></div><p class="muted-note">O modelo selecionado deve ter o formato <code>godmode/ID_DO_PROVEDOR/ID_DO_MODELO</code>. A API local não tem autenticação própria: mantenha o serviço limitado ao loopback e não o exponha na rede.</p></div>
+      </section>
+
+      <footer class="main-footer"><span>GODMODE CORE · INDEPENDENTE DO G0DM0D3</span><span>Execução local · Permissões explícitas · Memória do usuário</span></footer>
+    </main>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
