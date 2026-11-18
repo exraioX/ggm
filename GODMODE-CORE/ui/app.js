@@ -129,9 +129,7 @@ const WORKBENCH_COMMANDS = [
   { id:'projects', label:'Gerenciar Projetos', detail:'Workspaces locais', icon:'▰', run:() => setView('projects') },
   { id:'mcp', label:'Abrir Extensões e MCP', detail:'Servidores e ferramentas', icon:'◇', run:() => setView('mcp') },
   { id:'memory', label:'Abrir Memória', detail:'Contexto persistente', icon:'▥', run:() => setView('memory') },
-  { id:'monitor', label:'Abrir Monitor', detail:'Eventos e uso de ferramentas', icon:'⌁', run:() => setView('monitor') },
   { id:'workspace', label:'Abrir Terminal do Agente', detail:'Saída e permissões', icon:'>_', run:() => setView('workspace') },
-  { id:'taskqueue', label:'Abrir Fila de Tarefas', detail:'Execução sequencial', icon:'☷', run:() => setView('taskqueue') },
   { id:'providers', label:'Configurar Provedores de IA', detail:'Ollama, LM Studio, llama.cpp…', icon:'◉', run:() => setView('providers') },
   { id:'settings', label:'Abrir Sistema e API', detail:'Diagnóstico local', icon:'⚙', run:() => setView('settings') },
   { id:'new-chat', label:'Nova conversa', detail:'Criar um chat', icon:'＋', run:() => createConversation() },
@@ -1379,13 +1377,64 @@ function renderTools() {
 function renderMcpCapabilities() {
   const resourceHost = $('#mcp-resources-list');
   const promptHost = $('#mcp-prompts-list');
-  if (!resourceHost || !promptHost) return;
   const resCount = $('#resources-count');
   const promptCount = $('#prompts-count');
-  if (resCount) resCount.textContent = `${resources.length} recurso(s)`;
-  if (promptCount) promptCount.textContent = `${prompts.length} prompt(s)`;
+  if (resCount) resCount.textContent = resources.length + ' recurso(s)';
+  if (promptCount) promptCount.textContent = prompts.length + ' prompt(s)';
+
+  if (resourceHost) {
+    resourceHost.innerHTML = resources.map(resource => (
+      '<article class="capability-row">' +
+        '<div class="capability-row-main"><strong>' + escapeHtml(resource.name || resource.uri) + '</strong>' +
+        '<small>' + escapeHtml(resource.server) + ' · ' + escapeHtml(resource.mimeType || 'Resource') + '</small>' +
+        '<span>' + escapeHtml(resource.description || resource.uri || '') + '</span></div>' +
+        '<button type="button" class="button secondary small" data-read-resource data-server="' + escapeHtml(resource.server) + '" data-uri="' + escapeHtml(resource.uri) + '">Ler recurso</button>' +
+      '</article>'
+    )).join('') || '<div class="empty-inline">Nenhum resource anunciado por servidores conectados.</div>';
+  }
+  if (promptHost) {
+    promptHost.innerHTML = prompts.map(prompt => (
+      '<article class="capability-row">' +
+        '<div class="capability-row-main"><strong>' + escapeHtml(prompt.title || prompt.name) + '</strong>' +
+        '<small>' + escapeHtml(prompt.server) + ' · ' + ((prompt.arguments || []).length) + ' argumento(s)</small>' +
+        '<span>' + escapeHtml(prompt.description || 'Template de prompt MCP') + '</span></div>' +
+        '<button type="button" class="button secondary small" data-get-prompt data-server="' + escapeHtml(prompt.server) + '" data-prompt-name="' + escapeHtml(prompt.name) + '">Obter prompt</button>' +
+      '</article>'
+    )).join('') || '<div class="empty-inline">Nenhum prompt anunciado por servidores conectados.</div>';
+  }
 }
 
+async function inspectMcpResource(server, uri) {
+  const output = $('#mcp-capability-output');
+  if (output) output.textContent = 'Lendo resource ' + uri + '…';
+  try {
+    const result = await api('/api/mcp/resources/read', { method:'POST', body:JSON.stringify({ server, uri }) });
+    if (output) output.textContent = JSON.stringify(result.result, null, 2);
+  } catch (error) {
+    if (output) output.textContent = 'Falha ao ler resource: ' + error.message;
+    toast(error.message, true);
+  }
+}
+
+async function inspectMcpPrompt(server, name) {
+  const prompt = prompts.find(item => item.server === server && item.name === name);
+  const args = {};
+  for (const argument of (prompt?.arguments || [])) {
+    if (!argument.required) continue;
+    const value = window.prompt(argument.description || argument.name, '');
+    if (value === null) return;
+    args[argument.name] = value;
+  }
+  const output = $('#mcp-capability-output');
+  if (output) output.textContent = 'Obtendo prompt ' + name + '…';
+  try {
+    const result = await api('/api/mcp/prompts/get', { method:'POST', body:JSON.stringify({ server, name, arguments:args }) });
+    if (output) output.textContent = JSON.stringify(result.result, null, 2);
+  } catch (error) {
+    if (output) output.textContent = 'Falha ao obter prompt: ' + error.message;
+    toast(error.message, true);
+  }
+}
 async function importMcp() {
   const text = $('#mcp-config').value.trim();
   if (!text) { toast('Cole a configuração JSON antes de importar.', true); return; }
@@ -1487,7 +1536,7 @@ async function selectProject(id) {
     await Promise.all([refreshSystem(), refreshHealth(), loadMemories(), loadFileTree()]);
     toast(`Projeto ativo alterado para: ${projects.find(p => p.id === activeProjectId)?.name || id}`);
     toast('🔍 Indexando símbolos do projeto em background…');
-    api('/api/projects/index', { method: 'POST', body: JSON.stringify({ projectId: id }) })
+    api('/api/projects/' + encodeURIComponent(id) + '/index', { method: 'POST', body: '{}' })
       .then(r => toast(`📊 Índice atualizado: ${r.symbolCount || 0} símbolo(s) encontrado(s).`))
       .catch(() => {});
   } catch (error) {
@@ -1740,7 +1789,8 @@ function renderMonitorFeed() {
     let details = '';
     if (ev.type === 'tool_call') details = `<strong>${escapeHtml(ev.tool)}</strong> (${escapeHtml(ev.server)})`;
     else if (ev.type === 'tool_result') details = `<strong>${escapeHtml(ev.tool)}</strong> em ${ev.durationMs}ms`;
-    else if (ev.type === 'token_usage') details = `${ev.totalTokens || 0} tokens · modelo: ${escapeHtml(ev.model || '')}`;
+    else if (ev.type === 'token_usage') details = `${(ev.promptTokens || 0) + (ev.completionTokens || 0)} tokens`;
+    else if (ev.type === 'workflow_step') details = `<strong>${escapeHtml(ev.specialist || 'agente')}</strong> · etapa ${Number(ev.stepIndex || 0) + 1}/${ev.totalSteps || 0} · ${escapeHtml(ev.status || '')}${ev.durationMs ? ` · ${ev.durationMs} ms` : ''}`;
     else if (ev.type === 'step_progress') details = `Passo ${ev.step}/${ev.maxSteps} · ${escapeHtml(ev.phase || '')}`;
     else if (ev.type === 'error') details = `<span style="color:var(--danger);">${escapeHtml(ev.error || 'Erro desconhecido')}</span>`;
     return `
@@ -1973,21 +2023,9 @@ function initWorkspace() {
   const saved = localStorage.getItem('lupid-trust-level') || 'cautious';
   const savedInput = $(`input[name="trust-level"][value="${saved}"]`);
   if (savedInput) savedInput.checked = true;
-  renderWorkspaceLog();
-}
-
-function renderWorkspaceLog() {
-  const host = $('#agent-action-log');
-  if (!host || !monitorEvents.length) return;
-  host.innerHTML = monitorEvents.slice(-30).reverse().map(ev => {
-    const icon = { tool_call: '🔧', tool_result: '✅', error: '❌', token_usage: '📊', step_progress: '⚡' }[ev.type] || '◈';
-    const ts = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString('pt-BR') : '';
-    let detail = '';
-    if (ev.type === 'tool_call') detail = `<strong>${escapeHtml(ev.tool)}</strong>`;
-    else if (ev.type === 'tool_result') detail = `${escapeHtml(ev.tool)} · ${ev.durationMs || 0}ms`;
-    else if (ev.type === 'error') detail = `<span style="color:var(--danger)">${escapeHtml(ev.error || '')}</span>`;
-    return `<div class="monitor-item"><span class="monitor-time">${ts}</span> ${icon} <span>${detail}</span></div>`;
-  }).join('');
+  initMonitorIfNeeded();
+  renderMonitorFeed();
+  renderMonitorStats();
 }
 
 // ============================================================
@@ -2176,40 +2214,25 @@ document.addEventListener('keydown', event => {
   }
 });
 
-// Task Queue & Workspace Bindings
-$('#task-queue-form')?.addEventListener('submit', addTask);
+// Mission center, task queue, QA runner and execution console.
+$('#queue-workflow-btn')?.addEventListener('click', queueWorkflowTask);
+$('#run-task-queue')?.addEventListener('click', runTaskQueue);
 $('#clear-task-queue')?.addEventListener('click', clearTaskQueue);
-$('#run-task-queue')?.addEventListener('click', async () => {
-  toast('Iniciando execução da fila de tarefas...');
-  const pending = taskQueueItems.filter(t => t.status === 'pending');
-  if (!pending.length) {
-    toast('Nenhuma tarefa pendente na fila.', true);
-    return;
-  }
-  for (const t of pending) {
-    try {
-      toast(`Executando tarefa: ${t.instruction.slice(0, 40)}...`);
-      await api('/api/agents/workflow/run', {
-        method: 'POST',
-        body: JSON.stringify({ task: t.instruction, projectId: activeProjectId })
-      });
-      await api(`/api/tasks/${t.id}`, { method: 'DELETE' });
-      await loadTaskQueue();
-    } catch (err) {
-      toast(`Falha na tarefa: ${err.message}`, true);
-      break;
-    }
-  }
-  toast('Fila de tarefas finalizada!');
+$('#test-config-form')?.addEventListener('submit', saveTestRunnerConfig);
+$$('[data-run-suite]').forEach(button => button.addEventListener('click', () => runProjectSuite(button.dataset.runSuite, button)));
+$('#mcp-resources-list')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-read-resource]');
+  if (button) void inspectMcpResource(button.dataset.server, button.dataset.uri);
+});
+$('#mcp-prompts-list')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-get-prompt]');
+  if (button) void inspectMcpPrompt(button.dataset.server, button.dataset.promptName);
 });
 
 $('#clear-workspace-log')?.addEventListener('click', () => {
-  monitorEvents = [];
-  renderMonitorFeed();
-  renderMonitorStats();
-  const ws = $('#agent-action-log');
-  if (ws) ws.innerHTML = '';
-  toast('Log da área de trabalho limpo.');
+  const terminal = $('#agent-terminal-output');
+  if (terminal) terminal.textContent = '$ Aguardando comandos do agente...';
+  toast('Saída do terminal limpa.');
 });
 
 async function init() {
