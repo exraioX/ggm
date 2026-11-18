@@ -6,15 +6,13 @@ const STORE_KEY = 'godmode-core-conversations-v1';
 const VIEW_TITLES = {
   chat: 'Chat do Agente',
   files: 'Arquivos & Editor',
-  agents: 'Multiagente (7 Especialistas)',
+  agents: 'Orquestrador de Missões',
   projects: 'Gerenciador de Projetos',
-  mcp: 'Plugins & MCP Marketplace',
+  mcp: 'Integrações & MCP',
   memory: 'Memória Multi-Nível',
-  monitor: 'Monitor em Tempo Real',
   providers: 'Provedores de IA',
   settings: 'Sistema & API',
-  workspace: 'Área de Trabalho',
-  taskqueue: 'Fila de Tarefas'
+  workspace: 'Painel de Execução'
 };
 
 let taskQueueItems = [];
@@ -88,26 +86,40 @@ async function api(url, options = {}) {
   });
   const contentType = response.headers.get('content-type') || '';
   const payload = contentType.includes('application/json') ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(payload?.error || payload?.message || `Falha HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(payload?.error || payload?.message || `Falha HTTP ${response.status}`);
+    error.payload = payload;
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
 function setView(view) {
+  // Aliases mantidos para links antigos; fila e monitor agora vivem nos seus centros integrados.
+  if (view === 'taskqueue') view = 'agents';
+  if (view === 'monitor') view = 'workspace';
+
   $$('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach(section => section.classList.toggle('active', section.id === `view-${view}`));
   $('#page-title').textContent = VIEW_TITLES[view] || 'LUPID';
   $('#breadcrumb').textContent = `LUPID / ${(VIEW_TITLES[view] || view).toUpperCase()}`;
 
   if (view === 'files') loadFileTree();
-  if (view === 'agents') loadSpecialists();
+  if (view === 'agents') {
+    loadSpecialists();
+    loadTaskQueue();
+    loadTestRunnerConfig();
+  }
   if (view === 'projects') renderProjects();
   if (view === 'providers') renderProviders();
   if (view === 'mcp') { renderServers(); renderTools(); renderMcpCapabilities(); loadClaudePlugins(); loadMcpMarketplace(); }
   if (view === 'memory') renderMemories();
   if (view === 'settings') refreshSystem();
-  if (view === 'monitor') initMonitorIfNeeded();
-  if (view === 'workspace') initWorkspace();
-  if (view === 'taskqueue') loadTaskQueue();
+  if (view === 'workspace') {
+    initWorkspace();
+    initMonitorIfNeeded();
+  }
 }
 
 const WORKBENCH_COMMANDS = [
