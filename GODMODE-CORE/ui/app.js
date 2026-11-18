@@ -1651,7 +1651,7 @@ async function importMcp() {
   try {
     const result = await api('/api/mcp/import', { method: 'POST', body: JSON.stringify(config) });
     servers = result.servers || [];
-    await loadMcp();
+    await loadPluginManager();
     const fb = $('#mcp-import-feedback');
     if (fb) {
       fb.textContent = `${result.imported} servidor(es) importado(s).`;
@@ -1674,10 +1674,10 @@ async function connectMcp(name) {
   try {
     const result = await api(`/api/mcp/servers/${encodeURIComponent(name)}/connect`, { method: 'POST', body: '{}' });
     servers = result.servers || [];
-    await loadMcp();
+    await loadPluginManager();
     toast(`Servidor ${name} conectado.`);
   } catch (error) {
-    await loadMcp();
+    await loadPluginManager();
     toast(error.message, true);
   }
 }
@@ -1686,7 +1686,7 @@ async function disconnectMcp(name) {
   try {
     const result = await api(`/api/mcp/servers/${encodeURIComponent(name)}/disconnect`, { method: 'POST', body: '{}' });
     servers = result.servers || [];
-    await loadMcp();
+    await loadPluginManager();
     toast(`Servidor ${name} desconectado.`);
   } catch (error) { toast(error.message, true); }
 }
@@ -1696,7 +1696,7 @@ async function removeMcp(name) {
   try {
     const result = await api(`/api/mcp/servers/${encodeURIComponent(name)}`, { method: 'DELETE' });
     servers = result.servers || [];
-    await loadMcp();
+    await loadPluginManager();
     toast('Configuração removida.');
   } catch (error) { toast(error.message, true); }
 }
@@ -2555,8 +2555,7 @@ async function init() {
       refreshHealth(),
       loadFileTree(),
       loadSpecialists(),
-      loadClaudePlugins(),
-      loadMcpMarketplace(),
+      loadPluginManager(),
       loadTaskQueue()
     ]);
 
