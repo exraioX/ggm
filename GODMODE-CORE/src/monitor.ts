@@ -177,6 +177,19 @@ export class Monitor extends EventEmitter {
   }
 
   /**
+   * Limpa o replay buffer e sincroniza a limpeza com todos os clientes SSE.
+   */
+  clearEvents(): number {
+    const cleared = this.ringBuffer.length;
+    this.ringBuffer = [];
+    const payload = `data: ${JSON.stringify({ type: 'monitor_cleared', timestamp: Date.now() })}\n\n`;
+    for (const [res] of this.clients) {
+      try { res.write(payload); } catch { /* cliente será removido no close/error */ }
+    }
+    return cleared;
+  }
+
+  /**
    * Número de clientes SSE ativos.
    */
   get clientCount(): number {
