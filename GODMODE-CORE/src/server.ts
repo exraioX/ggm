@@ -896,6 +896,11 @@ app.get('/api/monitor/events', requireLocalApp, (_req, res) => {
   res.json({ events: monitor.getEvents(), count: monitor.getEvents().length });
 });
 
+app.post('/api/monitor/clear', requireLocalApp, (_req, res) => {
+  const cleared = monitor.clearEvents();
+  res.json({ ok: true, cleared });
+});
+
 // ============================================================
 // Diff Preview — visualização de diff antes da aprovação
 // ============================================================
