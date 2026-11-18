@@ -1545,28 +1545,29 @@ async function loadMcp() {
 function renderServers() {
   const host = $('#mcp-server-list');
   if (!host) return;
-  host.innerHTML = servers.map(server => `
-    <article class="mcp-card">
-      <div class="mcp-card-head">
-        <div>
-          <div class="mcp-name">${escapeHtml(server.name)}</div>
-          <div class="mcp-subline">${escapeHtml(server.transport || (server.command ? 'stdio' : 'HTTP'))} · ${server.command ? escapeHtml(server.command) : escapeHtml(server.url || '')}</div>
-        </div>
-        <span class="status-pill ${server.connected ? '' : 'off'}">${server.connected ? 'Conectado' : server.enabled === false ? 'Desativado' : 'Desconectado'}</span>
-      </div>
-      <div class="mcp-description">${escapeHtml(server.description || 'Servidor MCP configurado.')}</div>
-      <div class="mcp-subline" style="margin-top:6px;">${server.connected ? `${server.tools} ferramenta(s) disponíveis` : (server.error ? escapeHtml(server.error) : 'Conexão sob demanda.')}</div>
-      <div class="card-actions" style="margin-top:10px;">
-        ${server.connected ? `<button class="button secondary small" data-disconnect-mcp="${escapeHtml(server.name)}">Desconectar</button>` : `<button class="button primary small" data-connect-mcp="${escapeHtml(server.name)}" ${server.enabled === false ? 'disabled' : ''}>Conectar</button>`}
-        <button class="button secondary small" data-remove-mcp="${escapeHtml(server.name)}">Remover</button>
-      </div>
-    </article>`).join('') || '<div class="empty-inline">Nenhum servidor MCP configurado.</div>';
+  host.innerHTML = servers.map(server => (
+    '<div class="plugin-connection-row">' +
+      '<div class="plugin-connection-main"><strong>' + escapeHtml(server.name) + '</strong>' +
+      '<small>' + escapeHtml(server.transport || (server.command ? 'stdio' : 'HTTP')) + ' · ' +
+      escapeHtml(server.command || server.url || '') + '</small>' +
+      (server.error ? '<span class="plugin-connection-error">' + escapeHtml(server.error) + '</span>' : '') +
+      '</div>' +
+      '<span class="status-pill ' + (server.connected ? 'status-connected' : 'off') + '">' +
+        (server.connected ? 'Conectado' : server.enabled === false ? 'Desativado' : 'Desconectado') +
+      '</span>' +
+      '<div class="plugin-connection-actions">' +
+        (server.connected
+          ? '<button class="button secondary small" data-disconnect-mcp="' + escapeHtml(server.name) + '">Desconectar</button>'
+          : '<button class="button primary small" data-connect-mcp="' + escapeHtml(server.name) + '" ' + (server.enabled === false ? 'disabled' : '') + '>Conectar</button>') +
+        '<button class="button subtle-danger small" data-remove-mcp="' + escapeHtml(server.name) + '" ' + (server.connected ? 'disabled' : '') + ' title="Remover servidor">×</button>' +
+      '</div>' +
+    '</div>'
+  )).join('') || '<div class="empty-inline">Nenhum servidor MCP configurado.</div>';
 
-  $$('[data-connect-mcp]', host).forEach(button => button.addEventListener('click', () => connectMcp(button.dataset.connectMcp)));
-  $$('[data-disconnect-mcp]', host).forEach(button => button.addEventListener('click', () => disconnectMcp(button.dataset.disconnectMcp)));
-  $$('[data-remove-mcp]', host).forEach(button => button.addEventListener('click', () => removeMcp(button.dataset.removeMcp)));
+  $$('[data-connect-mcp]', host).forEach(button => button.addEventListener('click', () => void connectMcp(button.dataset.connectMcp)));
+  $$('[data-disconnect-mcp]', host).forEach(button => button.addEventListener('click', () => void disconnectMcp(button.dataset.disconnectMcp)));
+  $$('[data-remove-mcp]', host).forEach(button => button.addEventListener('click', () => void removeMcp(button.dataset.removeMcp)));
 }
-
 function renderTools() {
   const host = $('#mcp-tools-list');
   if (!host) return;
