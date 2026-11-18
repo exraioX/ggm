@@ -404,7 +404,12 @@ researchRouter.post('/runs', (req, res) => {
     if (!provider || provider.enabled === false || !model) continue;
     if (!targets.some(item => item.providerId === providerId && item.model === model)) targets.push({ providerId, model });
   }
-  const caseIds = [...new Set(rawCaseIds.filter((id: unknown): id is string => typeof id === 'string' && Boolean(getCase(id))))];
+  const caseIds: string[] = [];
+  for (const candidate of rawCaseIds) {
+    if (typeof candidate === 'string' && getCase(candidate) && !caseIds.includes(candidate)) {
+      caseIds.push(candidate);
+    }
+  }
   const repetitions = Math.min(3, Math.max(1, Number.parseInt(String(req.body?.repetitions || 1), 10) || 1));
   const temperatureInput = Number(req.body?.temperature);
   const temperature = Number.isFinite(temperatureInput) ? Math.min(1.2, Math.max(0, temperatureInput)) : 0.2;

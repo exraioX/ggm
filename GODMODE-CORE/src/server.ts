@@ -440,7 +440,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const client = providerRegistry.client(provider.id);
     const options = { ...req.body, model: match[2], messages };
     if (req.body?.stream === true) {
-      const stream = await client.chat.completions.create({ ...options, stream: true } as any) as AsyncIterable<any>;
+      const stream = await client.chat.completions.create({ ...options, stream: true } as any) as unknown as AsyncIterable<any>;
       res.status(200);
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
