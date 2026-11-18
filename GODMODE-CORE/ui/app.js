@@ -3,7 +3,10 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const STORE_KEY = 'godmode-core-conversations-v1';
-const VIEW_TITLES = { chat: 'Conversas', providers: 'Provedores de IA', mcp: 'Integrações MCP', memory: 'Memória', settings: 'Sistema' };
+const VIEW_TITLES = { chat: 'Conversas', projects: 'Gerenciador de Projetos', providers: 'Provedores de IA', mcp: 'Integrações MCP', memory: 'Memória Multi-Nível', settings: 'Sistema', monitor: 'Monitor' };
+let projects = [];
+let activeProjectId = '';
+let currentMemoryFilter = 'all';
 let providers = [];
 let servers = [];
 let tools = [];
@@ -15,6 +18,9 @@ let editingProviderId = null;
 let pendingApproval = null;
 let pendingApprovalConversationId = '';
 let isSending = false;
+let monitorSSE = null;
+let monitorEvents = [];
+let monitorConnected = false;
 let conversations = loadConversations();
 let activeConversationId = localStorage.getItem('godmode-core-active-chat') || '';
 let pendingAttachments = [];
@@ -64,10 +70,12 @@ function setView(view) {
   $$('.view').forEach(section => section.classList.toggle('active', section.id === `view-${view}`));
   $('#page-title').textContent = VIEW_TITLES[view] || 'GODMODE CORE';
   $('#breadcrumb').textContent = `GODMODE CORE / ${(VIEW_TITLES[view] || view).toUpperCase()}`;
+  if (view === 'projects') renderProjects();
   if (view === 'providers') renderProviders();
   if (view === 'mcp') { renderServers(); renderTools(); renderMcpCapabilities(); }
   if (view === 'memory') renderMemories();
   if (view === 'settings') refreshSystem();
+  if (view === 'monitor') initMonitorIfNeeded();
 }
 function createConversation() {
   const conversation = { id: crypto.randomUUID(), title: 'Nova conversa', messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -267,7 +275,7 @@ async function sendMessage(event) {
   isSending = true; setSendState(true);
   const typing = document.createElement('div'); typing.className = 'typing'; typing.textContent = 'GODMODE está pensando…'; $('#chat-messages').append(typing);
   try {
-    const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ providerId: activeProviderId, messages: messagesForModel(conversation.messages), toolsEnabled: $('#tools-toggle').checked }) });
+    const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ providerId: activeProviderId, projectId: activeProjectId, messages: messagesForModel(conversation.messages), toolsEnabled: $('#tools-toggle').checked }) });
     typing.remove(); handleAgentResult(result, conversationId);
   } catch (error) {
     typing.remove();
@@ -314,6 +322,12 @@ function renderApproval(approval) {
   host.innerHTML = `<div class="approval-title">⛨ Aprovação necessária · ${escapeHtml(approval.tool)}</div><div class="approval-desc">${escapeHtml(approval.description || approval.message || 'A ferramenta solicitou uma ação que exige confirmação.')}</div><pre class="approval-code">${escapeHtml(JSON.stringify(approval.arguments || {}, null, 2))}</pre><div class="approval-actions"><button class="button approve" id="approve-action">Aprovar e continuar</button><button class="button reject" id="reject-action">Rejeitar ação</button></div>`;
   $('#approve-action').addEventListener('click', () => decideApproval(true));
   $('#reject-action').addEventListener('click', () => decideApproval(false));
+  // Async diff preview — does not block panel display
+  if (approval.approvalId) {
+    fetchDiffPreview(approval.approvalId).then(diffData => {
+      if (diffData) renderDiffInApproval(diffData);
+    }).catch(() => undefined);
+  }
 }
 async function decideApproval(approved) {
   if (!pendingApproval) return;
@@ -499,25 +513,184 @@ async function removeMcp(name) {
   try { const result = await api(`/api/mcp/servers/${encodeURIComponent(name)}`, { method: 'DELETE' }); servers = result.servers || []; await loadMcp(); toast('Configuração removida.'); }
   catch (error) { toast(error.message, true); }
 }
-async function loadMemories() {
-  const result = await api('/api/memory'); memories = result.memories || []; renderMemories();
+// --- Gerenciador de Projetos ---
+async function loadProjects() {
+  try {
+    const data = await api('/api/projects');
+    projects = Array.isArray(data.projects) ? data.projects : [];
+    activeProjectId = data.activeId || projects[0]?.id || '';
+    renderProjectSelector();
+    renderProjects();
+  } catch (error) {
+    console.error('Falha ao carregar projetos:', error);
+  }
 }
+
+function renderProjectSelector() {
+  const sel = $('#project-selector');
+  if (!sel) return;
+  sel.innerHTML = projects.map(p => `
+    <option value="${escapeHtml(p.id)}" ${p.id === activeProjectId ? 'selected' : ''}>
+      ${escapeHtml(p.name)}
+    </option>
+  `).join('');
+}
+
+async function selectProject(id) {
+  if (!id || id === activeProjectId) return;
+  try {
+    const data = await api(`/api/projects/${encodeURIComponent(id)}/activate`, { method: 'POST' });
+    projects = data.projects || [];
+    activeProjectId = data.activeId || id;
+    renderProjectSelector();
+    renderProjects();
+    await Promise.all([refreshSystem(), refreshHealth(), loadMemories()]);
+    toast(`Projeto ativo alterado para: ${projects.find(p => p.id === activeProjectId)?.name || id}`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function submitProject(event) {
+  event.preventDefault();
+  const name = $('#proj-name')?.value.trim();
+  const pathVal = $('#proj-path')?.value.trim();
+  const desc = $('#proj-desc')?.value.trim();
+  if (!name || !pathVal) {
+    toast('Preencha nome e caminho da pasta.', true);
+    return;
+  }
+  try {
+    const res = await api('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({ name, path: pathVal, description: desc }),
+    });
+    projects = res.projects || [];
+    activeProjectId = res.activeId || activeProjectId;
+    $('#project-form')?.reset();
+    renderProjectSelector();
+    renderProjects();
+    toast('Projeto cadastrado com sucesso!');
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function deleteProject(id) {
+  const proj = projects.find(p => p.id === id);
+  if (!confirm(`Excluir o projeto "${proj?.name || id}"? Os arquivos no disco NÃO serão apagados.`)) return;
+  try {
+    const res = await api(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    projects = res.projects || [];
+    activeProjectId = res.activeId || projects[0]?.id || '';
+    renderProjectSelector();
+    renderProjects();
+    toast('Projeto removido.');
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function renderProjects() {
+  const host = $('#project-list');
+  if (!host) return;
+  const countEl = $('#projects-count');
+  if (countEl) countEl.textContent = `${projects.length} projeto(s) cadastrado(s)`;
+
+  host.innerHTML = projects.map(p => {
+    const isActive = p.id === activeProjectId;
+    return `
+      <article class="server-card" style="border-left: 3px solid ${isActive ? '#3fb950' : '#30363d'}">
+        <div class="server-card-head">
+          <div>
+            <h4>${escapeHtml(p.name)}</h4>
+            <small style="color:var(--text-muted);word-break:break-all;">${escapeHtml(p.path)}</small>
+          </div>
+          ${isActive ? '<span class="status-pill status-connected">ATIVO</span>' : ''}
+        </div>
+        <p style="margin: 8px 0; font-size: 13px; color: var(--text-muted);">${escapeHtml(p.description || 'Sem descrição.')}</p>
+        <div class="card-actions" style="margin-top: 10px; display: flex; gap: 8px;">
+          ${!isActive ? `<button class="button primary small" data-activate-project="${escapeHtml(p.id)}">Ativar</button>` : ''}
+          ${projects.length > 1 ? `<button class="button secondary small" data-delete-project="${escapeHtml(p.id)}">Remover</button>` : ''}
+        </div>
+      </article>
+    `;
+  }).join('') || '<div class="empty-inline">Nenhum projeto cadastrado.</div>';
+
+  $$('[data-activate-project]', host).forEach(btn => {
+    btn.addEventListener('click', () => selectProject(btn.dataset.activateProject));
+  });
+  $$('[data-delete-project]', host).forEach(btn => {
+    btn.addEventListener('click', () => deleteProject(btn.dataset.deleteProject));
+  });
+}
+
+// --- Memória Multi-Nível ---
+async function loadMemories() {
+  let query = '';
+  if (currentMemoryFilter === 'project') query = `?level=project&projectId=${encodeURIComponent(activeProjectId)}`;
+  else if (currentMemoryFilter === 'global') query = '?level=global';
+  else if (currentMemoryFilter === 'session') query = '?level=session';
+  const result = await api(`/api/memories${query}`);
+  memories = result.memories || [];
+  renderMemories();
+}
+
 function renderMemories() {
   const host = $('#memory-list'); if (!host) return;
-  $('#memory-count').textContent = `${memories.length} memória(s) persistente(s)`;
-  host.innerHTML = memories.map(item => `<article class="memory-card"><div class="memory-card-head"><div><h4>${escapeHtml(item.title)}</h4><small>${new Date(item.updatedAt || item.createdAt).toLocaleString('pt-BR')}</small></div><span class="memory-tag">${escapeHtml(item.category)}</span></div><p>${escapeHtml(item.content)}</p><div class="card-actions"><button class="button secondary small" data-delete-memory="${escapeHtml(item.id)}">Excluir</button></div></article>`).join('') || '<div class="empty-inline">Nenhuma memória foi salva ainda.</div>';
+  $('#memory-count').textContent = `${memories.length} memória(s) encontrada(s)`;
+  host.innerHTML = memories.map(item => {
+    const levelLabel = item.level === 'global' ? 'Global' : (item.level === 'project' ? 'Projeto' : 'Sessão');
+    const levelClass = item.level === 'global' ? 'risk-low' : (item.level === 'project' ? 'risk-medium' : 'risk-high');
+    const sourceLabel = item.source === 'agent' ? 'Agente' : (item.source === 'inference' ? 'Inferência' : 'Usuário');
+    return `
+      <article class="memory-card">
+        <div class="memory-card-head">
+          <div>
+            <h4>${escapeHtml(item.title)}</h4>
+            <small>${new Date(item.updatedAt || item.createdAt).toLocaleString('pt-BR')}</small>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <span class="risk-badge ${levelClass}">${escapeHtml(levelLabel)}</span>
+            <span class="memory-tag">${escapeHtml(item.category)}</span>
+            <span style="font-size:10px;color:var(--text-muted);margin-left:4px;">(${escapeHtml(sourceLabel)})</span>
+          </div>
+        </div>
+        <p>${escapeHtml(item.content)}</p>
+        <div class="card-actions">
+          <button class="button secondary small" data-delete-memory="${escapeHtml(item.id)}">Excluir</button>
+        </div>
+      </article>
+    `;
+  }).join('') || '<div class="empty-inline">Nenhuma memória encontrada para o filtro selecionado.</div>';
+
   $$('[data-delete-memory]', host).forEach(button => button.addEventListener('click', () => deleteMemory(button.dataset.deleteMemory)));
 }
+
 async function saveMemory(event) {
   event.preventDefault();
   try {
-    await api('/api/memory', { method: 'POST', body: JSON.stringify({ title: $('#memory-title').value, category: $('#memory-category').value, content: $('#memory-content').value }) });
-    $('#memory-form').reset(); await loadMemories(); toast('Memória salva no perfil local.');
+    const level = $('#memory-level')?.value || 'project';
+    await api('/api/memories', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: $('#memory-title').value,
+        category: $('#memory-category').value,
+        content: $('#memory-content').value,
+        level,
+        projectId: activeProjectId,
+        source: 'user',
+      })
+    });
+    $('#memory-form').reset();
+    await loadMemories();
+    toast('Memória salva no perfil local.');
   } catch (error) { toast(error.message, true); }
 }
+
 async function deleteMemory(id) {
   if (!confirm('Excluir esta memória permanentemente?')) return;
-  try { await api(`/api/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadMemories(); toast('Memória excluída.'); }
+  try { await api(`/api/memories/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadMemories(); toast('Memória excluída.'); }
   catch (error) { toast(error.message, true); }
 }
 async function refreshSystem() {
@@ -530,8 +703,160 @@ async function refreshSystem() {
   } catch (error) { $('#system-overview').innerHTML = `<div class="empty-inline">Não foi possível consultar o núcleo: ${escapeHtml(error.message)}</div>`; }
 }
 
+// --- Monitor SSE ---
+function initMonitorIfNeeded() {
+  if (monitorSSE) return;
+  // Replay stored events first
+  api('/api/monitor/events').then(data => {
+    const events = Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []);
+    events.forEach(ev => {
+      monitorEvents.push(ev);
+      if (monitorEvents.length > 200) monitorEvents.shift();
+    });
+    renderMonitorFeed();
+    renderMonitorStats();
+  }).catch(() => undefined);
+
+  function connect() {
+    const sse = new EventSource('/api/monitor/stream');
+    monitorSSE = sse;
+    sse.onopen = () => {
+      monitorConnected = true;
+      const dot = $('#monitor-status');
+      if (dot) { dot.classList.add('online'); }
+    };
+    sse.onmessage = event => {
+      let parsed;
+      try { parsed = JSON.parse(event.data); } catch { return; }
+      appendMonitorEvent(parsed);
+    };
+    sse.onerror = () => {
+      monitorConnected = false;
+      const dot = $('#monitor-status');
+      if (dot) { dot.classList.remove('online'); }
+      sse.close();
+      monitorSSE = null;
+      window.setTimeout(connect, 3000);
+    };
+  }
+  connect();
+}
+
+function appendMonitorEvent(event) {
+  monitorEvents.push(event);
+  if (monitorEvents.length > 200) monitorEvents.shift();
+  renderMonitorFeed();
+  renderMonitorStats();
+}
+
+function formatRelativeTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function renderMonitorFeed() {
+  const host = $('#monitor-feed');
+  if (!host) return;
+  if (!monitorEvents.length) { host.innerHTML = '<div style="color:var(--faint);font-size:11px;padding:12px;">Nenhum evento ainda.</div>'; return; }
+  host.innerHTML = monitorEvents.map(ev => {
+    const ts = formatRelativeTime(ev.timestamp || ev.ts || null);
+    const tsSpan = ts ? `<span style="color:var(--faint);margin-left:8px;font-size:10px;">${escapeHtml(ts)}</span>` : '';
+    let label = '';
+    let extraClass = '';
+    switch (ev.type) {
+      case 'agent_start':
+        label = `▶ Agente iniciado — modelo: ${escapeHtml(ev.model || '')}`;
+        break;
+      case 'tool_call':
+        label = `⚙ ${escapeHtml(ev.tool || '')} chamada${ev.approvalRequired ? ' <em>(aprovação necessária)</em>' : ''}`;
+        break;
+      case 'tool_result':
+        extraClass = ev.isError ? ' has-error' : '';
+        label = `✓ ${escapeHtml(ev.tool || '')} — ${escapeHtml(String(ev.durationMs ?? ''))}ms${ev.isError ? ' ❌ ERRO' : ''}`;
+        break;
+      case 'token_usage':
+        label = `◈ Tokens: ${escapeHtml(String(ev.promptTokens ?? 0))}p + ${escapeHtml(String(ev.completionTokens ?? 0))}c`;
+        break;
+      case 'agent_done':
+        label = `■ Concluído em ${escapeHtml(String(ev.totalMs ?? ''))}ms, ${escapeHtml(String(ev.steps ?? ''))} passos`;
+        break;
+      case 'error':
+        label = `✗ ERRO: ${escapeHtml(ev.message || '')}`;
+        break;
+      default:
+        label = escapeHtml(JSON.stringify(ev));
+    }
+    return `<div class="monitor-event monitor-event-${escapeHtml(ev.type || 'unknown')}${extraClass}">${label}${tsSpan}</div>`;
+  }).join('');
+  host.scrollTop = host.scrollHeight;
+}
+
+function renderMonitorStats() {
+  const host = $('#monitor-stats');
+  if (!host) return;
+  const toolCalls = monitorEvents.filter(ev => ev.type === 'tool_call').length;
+  const tokenEvents = monitorEvents.filter(ev => ev.type === 'token_usage');
+  const totalTokens = tokenEvents.reduce((sum, ev) => sum + (ev.promptTokens || 0) + (ev.completionTokens || 0), 0);
+  const toolResults = monitorEvents.filter(ev => ev.type === 'tool_result');
+  const avgMs = toolResults.length ? Math.round(toolResults.reduce((sum, ev) => sum + (ev.durationMs || 0), 0) / toolResults.length) : 0;
+  const errors = monitorEvents.filter(ev => ev.type === 'error' || (ev.type === 'tool_result' && ev.isError)).length;
+  host.innerHTML = [
+    ['Chamadas', toolCalls],
+    ['Tokens', totalTokens],
+    ['Tempo médio (ms)', avgMs || '—'],
+    ['Erros', errors],
+  ].map(([label, val]) => `<div class="monitor-stat"><strong>${escapeHtml(String(val))}</strong><span>${escapeHtml(label)}</span></div>`).join('');
+}
+
+// --- Diff visual no modal de aprovação ---
+function colorDiff(diffText) {
+  return escapeHtml(diffText)
+    .split('\n')
+    .map(line => {
+      if (line.startsWith('+') && !line.startsWith('+++')) return `<span class="diff-add">${line}</span>`;
+      if (line.startsWith('-') && !line.startsWith('---')) return `<span class="diff-del">${line}</span>`;
+      if (line.startsWith('@@')) return `<span class="diff-hunk">${line}</span>`;
+      if (line.startsWith('---') || line.startsWith('+++')) return `<span class="diff-header">${line}</span>`;
+      return `<span class="diff-ctx">${line}</span>`;
+    })
+    .join('\n');
+}
+
+async function fetchDiffPreview(approvalId) {
+  try {
+    const data = await api(`/api/approvals/${encodeURIComponent(approvalId)}/preview`);
+    if (data && data.diff) return data;
+    return null;
+  } catch { return null; }
+}
+
+function renderDiffInApproval(diffData) {
+  const host = $('#approval-panel');
+  if (!host) return;
+  const existing = host.querySelector('.diff-details');
+  if (existing) existing.remove();
+  const riskHtml = diffData.risk
+    ? `<span class="risk-badge risk-${escapeHtml(diffData.risk)}">${escapeHtml(diffData.risk)}</span> `
+    : '';
+  const details = document.createElement('details');
+  details.className = 'diff-details';
+  details.innerHTML = `<summary style="cursor:pointer;font-size:11px;color:#b9d7cf;margin-top:10px;">${riskHtml}Diff das alterações (clique para expandir)</summary><pre class="diff-block">${colorDiff(diffData.diff)}</pre>`;
+  host.appendChild(details);
+}
+
 // Wire up UI events
 $$('.nav-item').forEach(button => button.addEventListener('click', () => setView(button.dataset.view)));
+// Monitor clear — delegate since the view may render after script boot
+document.addEventListener('click', event => {
+  if (event.target && event.target.id === 'monitor-clear') {
+    monitorEvents = [];
+    renderMonitorFeed();
+    renderMonitorStats();
+  }
+});
 $('#new-chat-side').addEventListener('click', createConversation);
 $('#new-chat-top').addEventListener('click', createConversation);
 $('#chat-form').addEventListener('submit', sendMessage);
@@ -577,6 +902,16 @@ $('#connect-all-mcp').addEventListener('click', async () => {
   try { const result = await api('/api/mcp/servers/connect-all', { method: 'POST', body: '{}' }); await loadMcp(); const failed = result.results.filter(item => !item.ok); toast(failed.length ? `${failed.length} servidor(es) não conectaram.` : 'Todos os servidores habilitados conectaram.'); }
   catch (error) { toast(error.message, true); }
 });
+$('#project-selector')?.addEventListener('change', event => { selectProject(event.target.value); });
+$('#project-form')?.addEventListener('submit', submitProject);
+$$('.memory-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.memory-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMemoryFilter = btn.dataset.filter || 'all';
+    loadMemories();
+  });
+});
 $('#memory-form').addEventListener('submit', saveMemory);
 $('#refresh-system').addEventListener('click', refreshSystem);
 $('#copy-endpoint').addEventListener('click', async () => { try { await navigator.clipboard.writeText(`${location.origin}/v1`); toast('Endpoint copiado.'); } catch { toast('Não foi possível copiar o endpoint.', true); } });
@@ -584,7 +919,7 @@ $('#copy-endpoint').addEventListener('click', async () => { try { await navigato
 async function init() {
   if (!conversations.length) createConversation(); else if (!conversations.some(item => item.id === activeConversationId)) activeConversationId = conversations[0].id;
   renderConversationList(); renderChat();
-  try { await Promise.all([loadProviders(), loadMcp(), loadMemories(), refreshSystem(), refreshHealth()]); }
+  try { await Promise.all([loadProjects(), loadProviders(), loadMcp(), loadMemories(), refreshSystem(), refreshHealth()]); }
   catch (error) { toast(error.message, true); }
   window.setInterval(refreshHealth, 15000);
 }

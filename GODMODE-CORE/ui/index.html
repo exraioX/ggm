@@ -3,141 +3,404 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1118">
-  <title>GODMODE CORE</title>
+  <meta name="theme-color" content="#080c14">
+  <title>ANTIGRAVITY // GODMODE CORE</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">G</div>
-        <div><div class="brand-title">GODMODE</div><div class="brand-subtitle">CORE · AMBIENTE LOCAL</div></div>
+        <div class="brand-mark">▲</div>
+        <div>
+          <div class="brand-title">ANTIGRAVITY</div>
+          <div class="brand-subtitle">GODMODE CORE · WORKSPACE</div>
+        </div>
       </div>
-      <div class="workspace-label">ESPAÇO DE TRABALHO</div>
+
+      <div class="workspace-label">PROJETO ATIVO</div>
+      <div class="project-selector-wrap" style="padding: 0 10px 12px 10px;">
+        <select id="project-selector" class="select compact" style="width: 100%;"></select>
+      </div>
+
+      <div class="nav-group-label">AGENTE & CÓDIGO</div>
       <nav class="main-nav" aria-label="Navegação principal">
-        <button class="nav-item active" data-view="chat"><span class="nav-icon">◈</span> Conversas</button>
+        <button class="nav-item active" data-view="chat"><span class="nav-icon">◈</span> Chat do Agente</button>
+        <button class="nav-item" data-view="files"><span class="nav-icon">📁</span> Arquivos & Editor</button>
+        <button class="nav-item" data-view="agents"><span class="nav-icon">🤖</span> Multiagente (7)</button>
+        <button class="nav-item" data-view="projects"><span class="nav-icon">📂</span> Projetos</button>
       </nav>
+
+      <div class="nav-group-label">FERRAMENTAS & DADOS</div>
+      <nav class="main-nav" aria-label="Ferramentas">
+        <button class="nav-item" data-view="mcp"><span class="nav-icon">🧩</span> Plugins & MCP</button>
+        <button class="nav-item" data-view="memory"><span class="nav-icon">💾</span> Memória Multi-Nível</button>
+        <button class="nav-item" data-view="monitor"><span class="nav-icon">📊</span> Monitor em Tempo Real</button>
+      </nav>
+
       <div class="nav-group-label">CONFIGURAÇÃO</div>
       <nav class="main-nav" aria-label="Configuração">
         <button class="nav-item" data-view="providers"><span class="nav-icon">⌘</span> Provedores de IA</button>
-        <button class="nav-item" data-view="mcp"><span class="nav-icon">⌁</span> Integrações MCP</button>
-        <button class="nav-item" data-view="memory"><span class="nav-icon">▤</span> Memória</button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> Sistema & API</button>
       </nav>
-      <div class="nav-group-label">NÚCLEO</div>
-      <nav class="main-nav" aria-label="Núcleo">
-        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> Sistema</button>
-      </nav>
+
       <div class="sidebar-divider"></div>
-      <div class="conversation-heading"><span>CONVERSAS RECENTES</span><button id="new-chat-side" class="icon-button" title="Nova conversa">＋</button></div>
+      <div class="conversation-heading">
+        <span>CONVERSAS RECENTES</span>
+        <button id="new-chat-side" class="icon-button" title="Nova conversa">＋</button>
+      </div>
       <div id="conversation-list" class="conversation-list"></div>
+
       <div class="sidebar-bottom">
         <span id="gateway-indicator" class="status-dot"></span>
-        <div><div class="sidebar-status">Núcleo local</div><div id="gateway-status" class="sidebar-meta">Verificando conexão…</div></div>
-        <span class="local-lock" title="Acesso restrito ao computador local">⌑</span>
+        <div>
+          <div class="sidebar-status">Núcleo Antigravity</div>
+          <div id="gateway-status" class="sidebar-meta">Verificando conexão…</div>
+        </div>
+        <span class="local-lock" title="Execução estritamente local (loopback)">🔒</span>
       </div>
     </aside>
 
     <main class="main-area">
       <header class="topbar">
-        <div><div id="breadcrumb" class="breadcrumb">GODMODE CORE / CONVERSAS</div><h1 id="page-title">Conversas</h1></div>
-        <div class="topbar-actions"><span class="local-badge"><span class="status-dot"></span> EXECUÇÃO LOCAL</span><button id="new-chat-top" class="button primary small">＋ Nova conversa</button></div>
+        <div>
+          <div id="breadcrumb" class="breadcrumb">ANTIGRAVITY / CHAT DO AGENTE</div>
+          <h1 id="page-title">Chat do Agente</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="local-badge"><span class="status-dot online"></span> AGY SANDBOX LOCAL</span>
+          <button id="new-chat-top" class="button primary small">＋ Nova conversa</button>
+        </div>
       </header>
 
+      <!-- VIEW 1: CHAT -->
       <section id="view-chat" class="view active">
         <div class="chat-toolbar">
-          <div class="chat-title-wrap"><div class="chat-orb">✳</div><div><div id="active-chat-title" class="chat-title">Nova conversa</div><div class="chat-subtitle">As mensagens ficam salvas neste navegador.</div></div></div>
-          <div class="chat-controls"><label class="inline-label" for="chat-provider">MODELO</label><select id="chat-provider" class="select compact"></select><label class="toggle-label"><input id="tools-toggle" type="checkbox" checked><span class="toggle"></span><span>Ferramentas MCP</span></label></div>
+          <div class="chat-title-wrap">
+            <div class="chat-orb">▲</div>
+            <div>
+              <div id="active-chat-title" class="chat-title">Nova conversa</div>
+              <div class="chat-subtitle">Agente com ferramentas nativas: read_file, write_file, edit_file, run_command e plugins MCP.</div>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <label class="inline-label" for="chat-provider">MODELO</label>
+            <select id="chat-provider" class="select compact"></select>
+            <label class="toggle-label">
+              <input id="tools-toggle" type="checkbox" checked>
+              <span class="toggle"></span>
+              <span>Ferramentas Ativas</span>
+            </label>
+          </div>
         </div>
+
         <div id="chat-empty" class="empty-state">
-          <div class="empty-symbol">✳</div>
-          <h2>Um espaço de trabalho independente.</h2>
-          <p>Converse com modelos locais ou provedores externos. Conecte ferramentas MCP e permita que o agente as use com aprovação.</p>
-          <div class="quick-prompts"><button class="prompt-card" data-prompt="Analise a estrutura do workspace e resuma os principais componentes."><span>⌕</span><strong>Explorar projeto</strong><small>Entenda a estrutura do código</small></button><button class="prompt-card" data-prompt="Ajude-me a planejar uma melhoria neste projeto. Primeiro investigue e apresente um plano, sem modificar arquivos."><span>◫</span><strong>Planejar melhoria</strong><small>Investigue antes de alterar</small></button></div>
+          <div class="empty-symbol">▲</div>
+          <h2>Ambiente de Desenvolvimento Agêntico</h2>
+          <p>A IA pode investigar seu código, ler e editar arquivos cirurgicamente, executar comandos no terminal e acionar especialistas cooperativos.</p>
+          <div class="quick-prompts">
+            <button class="prompt-card" data-prompt="/plan Investigue o projeto e elabore um plano arquitetural detalhado para novas funcionalidades.">
+              <span>🏛</span><strong>/plan Arquitetura</strong><small>Investigue e planeje sem alterar arquivos</small>
+            </button>
+            <button class="prompt-card" data-prompt="/code Implemente testes unitários para os componentes principais do projeto.">
+              <span>💻</span><strong>/code Implementar</strong><small>Edição cirúrgica com diff visual</small>
+            </button>
+            <button class="prompt-card" data-prompt="/test Execute os testes do projeto e diagnostique possíveis falhas.">
+              <span>🧪</span><strong>/test Testar</strong><small>Execução isolada em sandbox</small>
+            </button>
+            <button class="prompt-card" data-prompt="/review Audite o código procurando potenciais bugs e vulnerabilidades de segurança.">
+              <span>🛡</span><strong>/review Revisão</strong><small>Inspeção profunda e auditoria</small>
+            </button>
+          </div>
         </div>
+
         <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
         <div id="approval-panel" class="approval-panel" hidden></div>
+
         <form id="chat-form" class="composer">
-          <div id="drop-overlay" class="drop-overlay" hidden>⤓ Solte as imagens aqui para anexar</div>
+          <div id="drop-overlay" class="drop-overlay" hidden>⇣ Solte as imagens aqui para anexar</div>
           <div id="attachment-list" class="attachment-list" hidden></div>
           <div class="composer-row">
             <label class="icon-button attach-button" for="chat-attach" title="Anexar imagem (ou arraste e solte)">
               <span aria-hidden="true">📎</span>
               <input id="chat-attach" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
             </label>
-            <textarea id="chat-input" rows="1" placeholder="Escreva sua mensagem… (Enter envia, Shift + Enter quebra linha, ou arraste imagens aqui)" aria-label="Mensagem"></textarea>
+            <textarea id="chat-input" rows="1" placeholder="Escreva sua instrução ou comando (/plan, /code, /test, /review, /reverse)…"></textarea>
+            <button id="chat-submit" class="button primary" type="submit">Enviar</button>
           </div>
-          <div class="composer-footer"><div class="composer-hints"><span>⟡ O agente pede aprovação antes de alterar arquivos ou executar comandos. · 📎 Arraste, cole ou anexe até 4 imagens.</span></div><button id="send-button" class="button primary send-button" type="submit"><span>Enviar</span><span>↑</span></button></div>
+          <div class="composer-hints">
+            <span>Dica: Use <code>/plan</code>, <code>/code</code>, <code>/test</code> ou <code>/review</code>. Modificações em arquivos acionam aprovação com diff e checkpoint automático.</span>
+          </div>
         </form>
       </section>
 
-      <section id="view-providers" class="view">
-        <div class="view-intro"><div><h2>Conecte seus modelos</h2><p>O núcleo aceita APIs compatíveis com OpenAI, servidores locais e provedores hospedados.</p></div><button id="add-provider" class="button secondary">＋ Adicionar provedor</button></div>
-        <div id="provider-cards" class="provider-grid"></div>
-        <div id="provider-form-wrap" class="panel provider-form-wrap" hidden>
-          <div class="panel-heading"><div><h3 id="provider-form-title">Configurar provedor</h3><p>Chaves ficam apenas na memória do processo do núcleo; não são gravadas no arquivo de configuração.</p></div><button id="close-provider-form" class="icon-button">×</button></div>
-          <form id="provider-form" class="form-grid">
-            <label>Identificador<input id="provider-id" required placeholder="ollama, lmstudio, openrouter"></label>
-            <label>Nome de exibição<input id="provider-name" required placeholder="Meu modelo local"></label>
-            <label>Tipo<select id="provider-kind"><option value="openai-compatible">API compatível com OpenAI</option><option value="openrouter">OpenRouter</option></select></label>
-            <label>Endereço base<input id="provider-url" required placeholder="http://127.0.0.1:11434/v1"></label>
-            <label class="span-two">Identificador do modelo<input id="provider-model" placeholder="qwen3:8b ou organização/modelo"></label>
-            <label class="span-two">Chave da API (opcional para modelos locais)<input id="provider-secret" type="password" autocomplete="off" placeholder="A chave não será persistida em disco"></label>
-            <div class="form-actions span-two"><button id="discover-models" type="button" class="button secondary">↻ Buscar modelos</button><button type="submit" class="button primary">Salvar provedor</button></div>
-            <div id="discovered-models" class="span-two model-list"></div>
-          </form>
+      <!-- VIEW 2: ARQUIVOS & EDITOR (FILE EXPLORER) -->
+      <section id="view-files" class="view">
+        <div class="view-intro">
+          <div>
+            <h2>Explorador de Arquivos & Editor</h2>
+            <p>Navegue pela árvore do projeto ativo e edite arquivos com segurança e checkpoints automáticos.</p>
+          </div>
+          <button id="refresh-file-tree" class="button secondary small">↻ Atualizar Árvore</button>
+        </div>
+        <div class="file-explorer-layout">
+          <div class="file-tree-panel panel">
+            <div class="panel-heading">
+              <div><h3>Árvore de Arquivos</h3><p id="file-tree-root">Workspace</p></div>
+            </div>
+            <div id="file-tree-container" class="file-tree-container">
+              <div class="empty-inline">Carregando arquivos do projeto…</div>
+            </div>
+          </div>
+          <div class="file-editor-panel panel">
+            <div class="editor-header">
+              <div class="editor-filename">
+                <span id="editor-file-badge" class="risk-badge risk-low" style="display:none;">ARQUIVO</span>
+                <span id="editor-active-file">Nenhum arquivo selecionado</span>
+              </div>
+              <div class="editor-actions">
+                <span id="editor-file-meta" style="font-size:11px;color:var(--muted);margin-right:8px;"></span>
+                <button id="editor-save-btn" class="button primary small" disabled>💾 Salvar Arquivo</button>
+              </div>
+            </div>
+            <div class="editor-body-wrap">
+              <textarea id="file-editor-textarea" class="code-editor-textarea" placeholder="Selecione um arquivo na árvore à esquerda para visualizar e editar seu conteúdo…" spellcheck="false" disabled></textarea>
+            </div>
+          </div>
         </div>
       </section>
 
+      <!-- VIEW 3: MULTIAGENTE (7 ESPECIALISTAS) -->
+      <section id="view-agents" class="view">
+        <div class="view-intro">
+          <div>
+            <h2>Orquestração Multiagente (7 Especialistas)</h2>
+            <p>O Orquestrador Principal coordena especialistas dedicados: Programador, Pesquisador, Revisor, QA, Arquiteto e Engenharia Reversa.</p>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="panel-heading">
+            <div>
+              <h3>Disparar Workflow Multiagente</h3>
+              <p>Descreva uma missão complexa. O orquestrador planejará os passos e acionará os especialistas de forma cooperativa.</p>
+            </div>
+          </div>
+          <form id="workflow-form" style="display:flex;gap:10px;margin-top:10px;">
+            <input id="workflow-task-input" class="input" style="flex:1;" placeholder="Ex: Criar uma suíte de testes unitários para o módulo de segurança e revisar potenciais falhas..." required>
+            <button id="workflow-submit-btn" class="button primary" type="submit">Executar Workflow</button>
+          </form>
+          <div id="workflow-progress" style="margin-top:14px;" hidden>
+            <h4 style="margin:0 0 10px 0;font-size:13px;color:var(--accent);">Progresso das Etapas:</h4>
+            <div id="workflow-steps-list" class="workflow-steps-list"></div>
+            <div id="workflow-synthesis" class="workflow-synthesis panel" style="margin-top:14px;background:#0b141d;" hidden>
+              <div class="panel-heading"><h4>Síntese Consolidada do Orquestrador</h4></div>
+              <pre id="workflow-synthesis-content" style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--text);"></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><h3>Roster dos 7 Especialistas</h3><p>Perfis cognitivos e diretrizes de atuação de cada agente.</p></div>
+        </div>
+        <div id="specialists-grid" class="mcp-server-grid"></div>
+      </section>
+
+      <!-- VIEW 4: PROJETOS -->
+      <section id="view-projects" class="view">
+        <div class="view-intro">
+          <div><h2>Gerenciador de Projetos</h2><p>Múltiplas pastas e repositórios locais com contexto, memórias e histórico isolados.</p></div>
+        </div>
+        <div class="memory-layout">
+          <div class="panel memory-form-panel">
+            <div class="panel-heading"><div><h3>Novo Projeto</h3><p>Cadastre uma pasta local para trabalhar isoladamente.</p></div></div>
+            <form id="project-form" class="stack-form">
+              <label>Nome do Projeto<input id="proj-name" required maxlength="80" placeholder="Ex: Meu App Backend"></label>
+              <label>Caminho da Pasta no Disco<input id="proj-path" required placeholder="Ex: C:\Users\exraio\meu-projeto"></label>
+              <label>Descrição<textarea id="proj-desc" rows="3" maxlength="300" placeholder="Descrição opcional do projeto…"></textarea></label>
+              <button class="button primary" type="submit">Cadastrar Projeto</button>
+            </form>
+          </div>
+          <div class="memory-list-wrap">
+            <div class="section-heading"><div><h3>Projetos Cadastrados</h3><p id="projects-count">Carregando…</p></div></div>
+            <div id="project-list" class="mcp-server-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: PLUGINS & MCP -->
       <section id="view-mcp" class="view">
-        <div class="view-intro"><div><h2>Receptor universal MCP</h2><p>Importe a configuração <code>mcpServers</code> do Claude Desktop ou cadastre qualquer servidor compatível com MCP.</p></div><span class="protocol-pill">STDIO · STREAMABLE HTTP · SSE</span></div>
-        <div class="panel import-panel">
-          <div class="panel-heading"><div><h3>Importar configuração</h3><p>O conteúdo é validado e salvo em <code>~/.godmode/mcp-servers.json</code>.</p></div><label class="button secondary file-button">Abrir JSON<input id="mcp-file" type="file" accept="application/json,.json" hidden></label></div>
-          <textarea id="mcp-config" class="code-input" spellcheck="false" aria-label="Configuração MCP JSON" placeholder='{
+        <div class="view-intro">
+          <div>
+            <h2>Plugins do Claude Code & Servidores MCP</h2>
+            <p>Integração total com Claude Code plugins, Claude Desktop e catálogo curado de servidores MCP.</p>
+          </div>
+          <button id="import-claude-btn" class="button primary small">⚡ Sincronizar Claude Code / Desktop</button>
+        </div>
+
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="panel-heading">
+            <div>
+              <h3>Plugins Detectados do Claude Code</h3>
+              <p>Ferramentas e extensões descobertas nas configurações do Claude.</p>
+            </div>
+          </div>
+          <div id="claude-plugins-list" class="claude-plugins-grid">
+            <div class="empty-inline">Clique em "Sincronizar Claude Code / Desktop" para carregar plugins instalados.</div>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><h3>Marketplace de Ferramentas MCP</h3><p>Servidores oficiais e curados para instalação rápida em um clique.</p></div>
+        </div>
+        <div id="mcp-marketplace-list" class="mcp-server-grid" style="margin-bottom:20px;"></div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div><h3>Importação Manual MCP (JSON)</h3><p>Cole a configuração com <code>mcpServers</code> usada no Claude Desktop.</p></div>
+          </div>
+          <textarea id="mcp-config" class="code-area" rows="6" placeholder='{
   "mcpServers": {
     "meu-servidor": {
       "command": "npx",
-      "args": ["-y", "pacote-mcp"],
-      "env": {},
-      "cwd": "C:/Projetos/meu-projeto"
-    },
-    "servidor-remoto": {
-      "url": "https://exemplo.com/mcp",
-      "transport": "streamable-http",
-      "headers": { "Authorization": "Bearer ${MINHA_CHAVE}" }
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/pasta"]
     }
   }
 }'></textarea>
-          <div class="import-footer"><span>Use <code>${NOME_DA_VARIAVEL}</code> para referenciar variáveis de ambiente sem gravar tokens no JSON.</span><button id="import-mcp" class="button primary">Validar e importar</button></div>
+          <div class="import-footer">
+            <span>Use <code>${NOME_DA_VARIAVEL}</code> para referenciar variáveis de ambiente com segurança.</span>
+            <button id="import-mcp" class="button primary">Validar e importar</button>
+          </div>
           <div id="mcp-import-feedback" class="feedback" aria-live="polite"></div>
         </div>
-        <div class="section-heading"><div><h3>Servidores configurados</h3><p>Conecte somente os servidores que reconhece e deseja executar.</p></div><button id="connect-all-mcp" class="button secondary small">Conectar habilitados</button></div>
+
+        <div class="section-heading">
+          <div><h3>Servidores MCP Configurados</h3><p>Servidores prontos para conexão no projeto.</p></div>
+          <button id="connect-all-mcp" class="button secondary small">Conectar habilitados</button>
+        </div>
         <div id="mcp-server-list" class="mcp-server-grid"></div>
-        <div class="panel tools-panel"><div class="panel-heading"><div><h3>Ferramentas descobertas</h3><p>Ferramentas sem indicação confiável de leitura exigem aprovação antes de executar.</p></div><span id="tools-count" class="count-pill">0 ferramentas</span></div><div id="mcp-tools-list" class="tools-list"><div class="empty-inline">Conecte um servidor MCP para descobrir suas ferramentas.</div></div></div>
-        <div class="capability-grid">
-          <div class="panel"><div class="panel-heading"><div><h3>Recursos MCP</h3><p>Conteúdos publicados pelos servidores, que podem ser lidos sob demanda.</p></div><span id="resources-count" class="count-pill">0 recursos</span></div><div id="mcp-resources-list" class="capability-list"><div class="empty-inline">Nenhum recurso anunciado.</div></div></div>
-          <div class="panel"><div class="panel-heading"><div><h3>Prompts MCP</h3><p>Modelos de prompt oferecidos pelos servidores, sem inserção automática na conversa.</p></div><span id="prompts-count" class="count-pill">0 prompts</span></div><div id="mcp-prompts-list" class="capability-list"><div class="empty-inline">Nenhum prompt anunciado.</div></div></div>
+
+        <div class="panel tools-panel" style="margin-top:18px;">
+          <div class="panel-heading">
+            <div><h3>Ferramentas Descobertas</h3><p>Ferramentas ativas disponíveis para o agente utilizar.</p></div>
+            <span id="tools-count" class="count-pill">0 ferramentas</span>
+          </div>
+          <div id="mcp-tools-list" class="tools-list">
+            <div class="empty-inline">Conecte um servidor MCP para descobrir ferramentas.</div>
+          </div>
         </div>
-        <div id="mcp-output-panel" class="panel mcp-output-panel" hidden><div class="panel-heading"><div><h3 id="mcp-output-title">Resultado MCP</h3><p>Conteúdo retornado pelo servidor selecionado.</p></div><button id="close-mcp-output" type="button" class="button secondary small">Fechar</button></div><pre id="mcp-output-body" class="mcp-output-body"></pre></div>
       </section>
 
+      <!-- VIEW 6: MEMÓRIA MULTI-NÍVEL -->
       <section id="view-memory" class="view">
-        <div class="view-intro"><div><h2>Memória persistente</h2><p>Notas e decisões ficam no perfil local e podem orientar conversas futuras, independentemente da interface.</p></div></div>
+        <div class="view-intro">
+          <div>
+            <h2>Memória Multi-Nível</h2>
+            <p>Memórias persistentes categorizadas em 3 níveis: Global, Projeto e Sessão, com origens auditáveis.</p>
+          </div>
+        </div>
+        <div class="memory-filters" style="display:flex;gap:8px;margin-bottom:14px;">
+          <button type="button" class="button small memory-filter active" data-filter="all">Todas as Memórias</button>
+          <button type="button" class="button small memory-filter" data-filter="project">Projeto Atual</button>
+          <button type="button" class="button small memory-filter" data-filter="global">Globais</button>
+          <button type="button" class="button small memory-filter" data-filter="session">Sessão</button>
+        </div>
         <div class="memory-layout">
-          <div class="panel memory-form-panel"><div class="panel-heading"><div><h3>Nova memória</h3><p>Registre decisões estáveis, contexto de projetos ou preferências de trabalho.</p></div></div><form id="memory-form" class="stack-form"><label>Título<input id="memory-title" required maxlength="120" placeholder="Arquitetura atual do projeto"></label><label>Categoria<select id="memory-category"><option>Projeto</option><option>Decisão</option><option>Preferência</option><option>Referência</option></select></label><label>Conteúdo<textarea id="memory-content" required maxlength="6000" rows="6" placeholder="Descreva a informação que será útil em outras sessões…"></textarea></label><button class="button primary" type="submit">Salvar memória</button></form></div>
-          <div class="memory-list-wrap"><div class="section-heading"><div><h3>Memórias salvas</h3><p id="memory-count">Carregando…</p></div></div><div id="memory-list" class="memory-list"></div></div>
+          <div class="panel memory-form-panel">
+            <div class="panel-heading"><div><h3>Nova Memória</h3><p>Registre regras, contexto arquitetural ou preferências técnicas.</p></div></div>
+            <form id="memory-form" class="stack-form">
+              <label>Título<input id="memory-title" required maxlength="120" placeholder="Arquitetura do sistema"></label>
+              <label>Nível
+                <select id="memory-level">
+                  <option value="project">Projeto (restrito ao projeto ativo)</option>
+                  <option value="global">Global (disponível em todos os projetos)</option>
+                </select>
+              </label>
+              <label>Categoria
+                <select id="memory-category">
+                  <option>Projeto</option>
+                  <option>Decisão</option>
+                  <option>Preferência</option>
+                  <option>Referência</option>
+                  <option>Técnico</option>
+                </select>
+              </label>
+              <label>Conteúdo<textarea id="memory-content" required maxlength="6000" rows="5" placeholder="Descreva o conhecimento que guiará as próximas sessões…"></textarea></label>
+              <button class="button primary" type="submit">Salvar memória</button>
+            </form>
+          </div>
+          <div class="memory-list-wrap">
+            <div class="section-heading"><div><h3>Memórias Registradas</h3><p id="memory-count">Carregando…</p></div></div>
+            <div id="memory-list" class="memory-list"></div>
+          </div>
         </div>
       </section>
 
-      <section id="view-settings" class="view">
-        <div class="view-intro"><div><h2>Estado do sistema</h2><p>Diagnóstico do núcleo independente e informações de integração.</p></div><button id="refresh-system" class="button secondary">↻ Atualizar</button></div>
-        <div id="system-overview" class="system-grid"></div>
-        <div class="panel api-panel"><div class="panel-heading"><div><h3>API compatível com OpenAI</h3><p>Permite usar o GODMODE CORE em outros clientes locais que aceitam um endpoint OpenAI-compatible.</p></div><span class="protocol-pill">REST + CHAT COMPLETIONS</span></div><div class="endpoint-row"><div><small>ENDPOINT</small><code id="openai-endpoint">http://127.0.0.1:8765/v1</code></div><button id="copy-endpoint" class="button secondary small">Copiar</button></div><p class="muted-note">O modelo selecionado deve ter o formato <code>godmode/ID_DO_PROVEDOR/ID_DO_MODELO</code>. A API local não tem autenticação própria: mantenha o serviço limitado ao loopback e não o exponha na rede.</p></div>
+      <!-- VIEW 7: MONITOR EM TEMPO REAL -->
+      <section id="view-monitor" class="view">
+        <div class="view-intro">
+          <div><h2>Monitor em Tempo Real</h2><p>Streaming SSE de eventos do agente: chamadas de ferramentas, tokens, duração e erros.</p></div>
+          <div style="display:flex;gap:8px;">
+            <button id="monitor-clear" class="button secondary small">Limpar Logs</button>
+            <span id="monitor-status" class="status-dot"></span>
+          </div>
+        </div>
+        <div class="monitor-stats" id="monitor-stats"></div>
+        <div id="monitor-feed" class="monitor-feed"></div>
       </section>
 
-      <footer class="main-footer"><span>GODMODE CORE</span><span>Execução local · Permissões explícitas · Memória do usuário</span></footer>
+      <!-- VIEW 8: PROVEDORES DE IA -->
+      <section id="view-providers" class="view">
+        <div class="view-intro">
+          <div><h2>Provedores de IA & Model Router</h2><p>Conecte Ollama, LM Studio, llama.cpp ou OpenRouter com roteamento inteligente e fallback.</p></div>
+          <button id="add-provider" class="button primary small">＋ Novo Provedor</button>
+        </div>
+        <div id="provider-form-wrap" class="panel" style="margin-bottom:18px;" hidden>
+          <div class="panel-heading">
+            <div><h3 id="provider-form-title">Cadastrar Provedor</h3><p>Preencha os dados do endpoint OpenAI-compatible.</p></div>
+            <button id="close-provider-form" class="button secondary small" type="button">Fechar</button>
+          </div>
+          <form id="provider-form" class="stack-form">
+            <label>ID<input id="provider-id" required pattern="[a-z0-9_-]+" placeholder="ex: ollama-local"></label>
+            <label>Nome Amigável<input id="provider-name" required placeholder="ex: Ollama Llama 3"></label>
+            <label>Endpoint Base URL<input id="provider-url" required placeholder="http://127.0.0.1:11434/v1"></label>
+            <label>Identificador do Modelo<input id="provider-model" placeholder="qwen2.5-coder:7b"></label>
+            <div style="display:flex;gap:8px;margin-top:6px;">
+              <button id="discover-models" class="button secondary" type="button">Buscar Modelos Disponíveis</button>
+              <button class="button primary" type="submit">Salvar Provedor</button>
+            </div>
+          </form>
+        </div>
+        <div id="provider-list" class="mcp-server-grid"></div>
+      </section>
+
+      <!-- VIEW 9: SISTEMA & API -->
+      <section id="view-settings" class="view">
+        <div class="view-intro">
+          <div><h2>Estado do Sistema & Diagnóstico</h2><p>Informações técnicas e endpoint OpenAI-compatible local.</p></div>
+          <button id="refresh-system" class="button secondary small">↻ Atualizar</button>
+        </div>
+        <div id="system-overview" class="system-grid"></div>
+        <div class="panel api-panel" style="margin-top:18px;">
+          <div class="panel-heading">
+            <div><h3>API compatível com OpenAI</h3><p>Utilize o GODMODE CORE em outros clientes locais que aceitam API OpenAI.</p></div>
+            <span class="protocol-pill">REST + CHAT COMPLETIONS</span>
+          </div>
+          <div class="endpoint-row">
+            <div><small>ENDPOINT LOCAL</small><code id="openai-endpoint">http://127.0.0.1:8765/v1</code></div>
+            <button id="copy-endpoint" class="button secondary small">Copiar Endpoint</button>
+          </div>
+          <p class="muted-note">O modelo deve seguir o formato <code>godmode/ID_DO_PROVEDOR/ID_DO_MODELO</code>. O acesso é estritamente limitado ao loopback do computador local.</p>
+        </div>
+      </section>
+
+      <footer class="main-footer">
+        <span>ANTIGRAVITY // GODMODE CORE v1.0</span>
+        <span>Execução 100% Local · Sandbox Isolado · Permissões Explícitas</span>
+      </footer>
     </main>
   </div>
+
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <script src="/app.js" defer></script>
 </body>

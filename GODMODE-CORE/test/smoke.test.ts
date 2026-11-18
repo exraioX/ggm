@@ -15,7 +15,7 @@ test('endpoints permitem loopback HTTP e HTTPS, mas recusam HTTP remoto e creden
 test('CORS aceita somente origens explicitamente permitidas ou do próprio Core', () => {
   // Por padrão (sem GODMODE_ALLOWED_ORIGINS configurado) só a própria interface do Core é aceita.
   assert.equal(isAllowedLocalOrigin('http://127.0.0.1:8765'), true);
-  assert.equal(isAllowedLocalOrigin('http://localhost:3000'), false);
+  assert.equal(isAllowedLocalOrigin('http://localhost:9999'), false);
   assert.equal(isAllowedLocalOrigin('http://localhost:5173'), false);
   assert.equal(isAllowedLocalOrigin('https://site-malicioso.example'), false);
 });
