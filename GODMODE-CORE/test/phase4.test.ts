@@ -90,6 +90,19 @@ test('multiAgentOrchestrator: contém os 7 especialistas e planeja workflow', ()
   assert.ok(roles.includes('architect'));
   assert.ok(roles.includes('reverse_engineer'));
 
+  // Seleção explícita executa somente o perfil solicitado; auto constrói o plano completo.
+  const onlyCoder = multiAgentOrchestrator.createWorkflowStepsForRole('Implementar uma função', 'coder');
+  assert.equal(onlyCoder.length, 1);
+  assert.equal(onlyCoder[0].specialist, 'coder');
+
+  const onlyOrchestrator = multiAgentOrchestrator.createWorkflowStepsForRole('Analisar a arquitetura', 'orchestrator');
+  assert.equal(onlyOrchestrator.length, 1);
+  assert.equal(onlyOrchestrator[0].specialist, 'orchestrator');
+
+  const automaticPlan = multiAgentOrchestrator.createWorkflowStepsForRole('Criar e testar um serviço');
+  assert.ok(automaticPlan.length > 1);
+  assert.equal(automaticPlan[0].specialist, 'orchestrator');
+
   // Planejamento de workflow de engenharia reversa
   const reversePlan = multiAgentOrchestrator.planWorkflow('Descompilar o binário e analisar protocolo reverso');
   assert.ok(reversePlan.some(s => s.specialist === 'reverse_engineer'));
