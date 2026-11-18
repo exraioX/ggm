@@ -4,7 +4,7 @@ O GODMODE CORE é um núcleo de orquestração autônomo: interface própria, AP
 
 ## O que está incluído
 
-- Interface web própria, em português, servida pelo próprio núcleo, com o menu lateral organizado em grupos (Conversas · Configuração · Núcleo).
+- Interface web própria, em português, servida pelo núcleo, com barra de atividades, painel de workspace, Explorer, editor em abas, paleta de comandos, painel inferior de execução e barra de status.
 - Conversas por navegador com histórico local nesse navegador, incluindo anexos de imagem (arraste e solte, colar da área de transferência ou selecionar arquivo) para modelos com suporte a visão.
 - Provedores locais e externos por API compatível com OpenAI (Ollama, llama.cpp, LM Studio e OpenRouter, conforme o endpoint oferecido pelo provedor).
 - Credenciais de provedores mantidas apenas na memória do processo; não são gravadas pelo GODMODE CORE nos arquivos de provedor. Se o processo reiniciar, chaves inseridas na interface precisam ser inseridas novamente, salvo se forem fornecidas pelo ambiente por meio de `apiKeyEnv`.
@@ -13,6 +13,9 @@ O GODMODE CORE é um núcleo de orquestração autônomo: interface própria, AP
 - Descoberta de ferramentas MCP para o agente, além de recursos e prompts apresentados na interface (leitura/obtenção sob demanda).
 - Aprovação individual antes de chamadas potencialmente mutáveis, comandos e caminhos fora do workspace — incluindo caminhos disfarçados como URIs `file://`.
 - Memórias de texto persistentes em `~/.godmode/memory.json` (não é um banco vetorial).
+- Centro de Missões que reúne execução imediata, fila persistente, histórico de resultados, repetição de tarefas com falha e validação de projeto (testes, lint e build/typecheck).
+- Painel de Execução que reúne timeline SSE e saída real das ferramentas; a limpeza do histórico é compartilhada entre as abas abertas.
+- Consulta de resources e prompts MCP anunciados por servidores conectados.
 - API REST e fachada OpenAI-compatible em `/v1` para outros clientes locais, com respostas normais e streaming SSE em `chat/completions`.
 
 ## Requisitos
@@ -161,3 +164,33 @@ A interface do Core usa um layout de IDE inspirado no fluxo de trabalho do VS Co
 
 O editor mantém várias abas abertas, sinaliza alterações não salvas, permite alternar e fechar abas, exibe numeração de linhas e posição do cursor e oferece filtro da árvore de arquivos. Ao trocar de projeto, alterações pendentes são confirmadas antes de fechar o workspace atual. O salvamento continua passando pela API local e pelo mecanismo de checkpoint do Core.
 
+## Missões, fila e validação
+
+A tela **Orquestrador de Missões** é a entrada única para o trabalho planejado:
+
+- **Automático** cria um plano sequencial com os especialistas aplicáveis.
+- Selecionar um especialista executa somente aquele perfil.
+- **Executar agora** e **Adicionar à fila** usam o mesmo executor do backend. A fila mantém estado, resultado e erro; tarefas com falha podem ser reenfileiradas.
+- A execução multiagente atual faz chamadas sequenciais ao mesmo provedor configurado e compartilha contexto entre os perfis. Ela não executa ferramentas nativas ou MCP por conta própria e não aplica alterações ao repositório. Para ler/editar arquivos, executar comandos ou acionar ferramentas MCP com aprovações, use o **Chat do Agente**.
+
+Na mesma tela, o **Validador do Projeto** executa os comandos configurados para testes, lint e build/typecheck pelo ProcessSandbox, dentro da pasta do projeto. Os comandos e o limite de tempo são configuráveis por projeto. No Windows, os comandos comuns `npm`, `npx`, `pnpm` e `yarn` são resolvidos por seus shims `.cmd`.
+
+A tela **Painel de Execução** combina timeline de eventos e terminal. As saídas de ferramentas são limitadas a 6.000 caracteres por evento no monitor; a limpeza apaga o buffer compartilhado em memória e sincroniza as abas SSE conectadas. O histórico não é persistido após reiniciar o processo.
+
+As permissões de segurança continuam no backend. O seletor visual de “autonomia” foi removido por não controlar permissões reais: o toggle de ferramentas no Chat controla se o modelo recebe ferramentas, e operações mutáveis continuam sujeitas às aprovações do núcleo.
+
+### API de missões e validação
+
+- `POST /api/agents/workflow/plan` — planejar uma missão.
+- `POST /api/agents/workflow/run` — executar uma missão imediata pelo executor compartilhado com a fila.
+- `GET /api/tasks` — consultar tarefas e estatísticas do projeto.
+- `POST /api/tasks` — adicionar tarefa à fila.
+- `POST /api/tasks/run` — processar as tarefas pendentes do projeto sequencialmente.
+- `POST /api/tasks/:id/retry` — reenfileirar tarefa com falha.
+- `POST /api/projects/:id/tests/run` e `GET|POST /api/projects/:id/tests/config` — executar/configurar testes, lint e build.
+- `GET /api/monitor/events`, `GET /api/monitor/stream` e `POST /api/monitor/clear` — ler, acompanhar e limpar eventos.
+- `POST /api/mcp/resources/read` e `POST /api/mcp/prompts/get` — consultar capacidades MCP anunciadas.
+
+### Validação contínua
+
+O workflow do GitHub Actions em `.github/workflows/validate-core.yml` instala dependências com `npm ci`, executa `npm run typecheck` e `npm test` no diretório `GODMODE-CORE` para pushes e pull requests em `claude` e `main`.
