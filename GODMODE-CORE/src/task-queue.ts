@@ -56,13 +56,31 @@ export class TaskQueue {
     const task = this.tasks.find(t => t.id === id);
     if (!task) return;
     task.status = status;
-    if (status === 'running') task.startedAt = new Date().toISOString();
-    if (status === 'completed' || status === 'failed') {
+
+    if (status === 'pending') {
+      delete task.startedAt;
+      delete task.completedAt;
+      delete task.result;
+      delete task.error;
+    } else if (status === 'running') {
+      task.startedAt = new Date().toISOString();
+      delete task.completedAt;
+      delete task.result;
+      delete task.error;
+    } else {
       task.completedAt = new Date().toISOString();
-      if (result) task.result = result.slice(0, 5000);
-      if (error) task.error = error.slice(0, 1000);
+      if (result !== undefined) task.result = result.slice(0, 5000);
+      if (error !== undefined) task.error = error.slice(0, 1000);
     }
     this.persist();
+  }
+
+  retry(id: string): AgentTask {
+    const task = this.tasks.find(t => t.id === id);
+    if (!task) throw new Error('Tarefa não encontrada.');
+    if (task.status === 'running') throw new Error('Não é possível reenfileirar uma tarefa em execução.');
+    this.updateStatus(id, 'pending');
+    return task;
   }
 
   remove(id: string): void {
@@ -72,7 +90,8 @@ export class TaskQueue {
 
   clear(projectId?: string): void {
     if (projectId) {
-      this.tasks = this.tasks.filter(t => t.projectId && t.projectId !== projectId);
+      // Mantém tarefas globais e de outros projetos; remove somente as do projeto ativo.
+      this.tasks = this.tasks.filter(t => t.projectId !== projectId);
     } else {
       this.tasks = [];
     }
