@@ -222,6 +222,18 @@ export class MultiAgentOrchestrator {
     return steps;
   }
 
+  createWorkflowStepsForRole(task: string, role: SpecialistRole | 'auto' = 'auto'): WorkflowStep[] {
+    const instruction = task.trim();
+    if (!instruction) throw new Error('Informe uma tarefa para o workflow.');
+    if (role === 'auto') return this.planWorkflow(instruction);
+    return [{
+      id: randomUUID(),
+      specialist: role,
+      instruction,
+      status: 'pending',
+    }];
+  }
+
   /**
    * Executa um workflow multiagente coordenado usando provedores configurados.
    */
@@ -244,14 +256,7 @@ export class MultiAgentOrchestrator {
     }
 
     const role = options.role || 'auto';
-    const steps: WorkflowStep[] = role !== 'auto' && role !== 'orchestrator'
-      ? [{
-          id: randomUUID(),
-          specialist: role,
-          instruction: normalizedTask,
-          status: 'pending',
-        }]
-      : this.planWorkflow(normalizedTask);
+    const steps = this.createWorkflowStepsForRole(normalizedTask, role);
 
     const workflowId = randomUUID();
     const startTime = Date.now();
