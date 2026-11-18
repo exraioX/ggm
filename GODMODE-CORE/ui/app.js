@@ -29,6 +29,9 @@ let specialists = [];
 let claudePlugins = [];
 let mcpCatalog = [];
 let activeProviderId = '';
+let activeModelId = '';
+let providerModelCatalogs = new Map();
+let sidebarSearchText = '';
 let editingProviderId = null;
 let pendingApproval = null;
 let pendingApprovalConversationId = '';
@@ -100,7 +103,7 @@ function setView(view) {
   if (view === 'taskqueue') view = 'agents';
   if (view === 'monitor') view = 'workspace';
 
-  $$('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  $('.nav-item, .sidebar-link').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach(section => section.classList.toggle('active', section.id === `view-${view}`));
   $('#page-title').textContent = VIEW_TITLES[view] || 'LUPID';
   $('#breadcrumb').textContent = `LUPID / ${(VIEW_TITLES[view] || view).toUpperCase()}`;
@@ -113,7 +116,7 @@ function setView(view) {
   }
   if (view === 'projects') renderProjects();
   if (view === 'providers') renderProviders();
-  if (view === 'mcp') { renderServers(); renderTools(); renderMcpCapabilities(); loadClaudePlugins(); loadMcpMarketplace(); }
+  if (view === 'mcp') { loadPluginManager(); }
   if (view === 'memory') renderMemories();
   if (view === 'settings') refreshSystem();
   if (view === 'workspace') {
@@ -207,11 +210,17 @@ function deleteConversation(id) {
 
 function renderConversationList() {
   const host = $('#conversation-list');
-  host.innerHTML = conversations.map(item => `
+  if (!host) return;
+  const query = sidebarSearchText.trim().toLowerCase();
+  const visible = conversations.slice().sort((a, b) =>
+    new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
+  ).filter(item => !query || (item.title || '').toLowerCase().includes(query));
+
+  host.innerHTML = visible.map(item => `
     <div class="conversation-item ${item.id === activeConversationId ? 'active' : ''}" data-conversation="${escapeHtml(item.id)}">
-      <span>◈</span><span class="conv-name">${escapeHtml(item.title || 'Nova conversa')}</span>
+      <span class="conversation-item-icon">◈</span><span class="conv-name">${escapeHtml(item.title || 'Nova conversa')}</span>
       <button class="delete-conv" data-delete-conversation="${escapeHtml(item.id)}" title="Excluir conversa" aria-label="Excluir conversa">×</button>
-    </div>`).join('');
+    </div>`).join('') || '<div class="sidebar-empty">\nNenhuma conversa encontrada.</div>';
 
   $$('.conversation-item', host).forEach(node => node.addEventListener('click', event => {
     if (event.target.closest('[data-delete-conversation]')) return;
@@ -221,6 +230,7 @@ function renderConversationList() {
     saveConversations();
     renderConversationList();
     renderChat();
+    setView('chat');
   }));
 
   $$('[data-delete-conversation]', host).forEach(button => button.addEventListener('click', event => {
@@ -229,6 +239,25 @@ function renderConversationList() {
   }));
 }
 
+function renderSidebarProjects() {
+  const host = $('#sidebar-project-list');
+  if (!host) return;
+  const query = sidebarSearchText.trim().toLowerCase();
+  const visible = projects.filter(project => !query ||
+    project.name.toLowerCase().includes(query) ||
+    (project.path || '').toLowerCase().includes(query)
+  );
+  host.innerHTML = visible.map(project => `
+    <button type="button" class="sidebar-project-row ${project.id === activeProjectId ? 'active' : ''}" data-sidebar-project="${escapeHtml(project.id)}" title="${escapeHtml(project.path)}">
+      <span class="sidebar-project-icon">${project.id === activeProjectId ? '◉' : '▰'}</span>
+      <span>${escapeHtml(project.name)}</span>
+      ${project.id === activeProjectId ? '<i></i>' : ''}
+    </button>`).join('') || '<div class="sidebar-empty">Nenhum projeto encontrado.</div>';
+
+  $$('[data-sidebar-project]', host).forEach(button => button.addEventListener('click', () => {
+    void selectProject(button.dataset.sidebarProject);
+  }));
+}
 function formatMarkdown(raw) {
   if (!raw) return '';
   const codeBlocks = [];
@@ -302,18 +331,60 @@ function renderChat() {
 
 function updateProviderSelect() {
   const select = $('#chat-provider');
-  if (!select) return;
   const usable = providers.filter(item => item.enabled !== false);
+  if (!select) return;
   if (!usable.length) {
     select.innerHTML = '<option value="">Nenhum provedor cadastrado</option>';
     activeProviderId = '';
+    activeModelId = '';
+    if ($('#chat-model')) $('#chat-model').value = '';
     return;
   }
   if (!usable.some(item => item.id === activeProviderId)) activeProviderId = usable[0].id;
-  select.innerHTML = usable.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}${item.model ? ` · ${escapeHtml(item.model)}` : ' · configure um modelo'}</option>`).join('');
+  select.innerHTML = usable.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
   select.value = activeProviderId;
+  const provider = usable.find(item => item.id === activeProviderId);
+  const savedModel = localStorage.getItem('godmode-model:' + activeProviderId);
+  activeModelId = savedModel || provider?.model || '';
+  if ($('#chat-model')) $('#chat-model').value = activeModelId;
+  void loadProviderModelCatalog(activeProviderId);
 }
 
+async function loadProviderModelCatalog(id, force = false) {
+  if (!id) return [];
+  if (!force && providerModelCatalogs.has(id)) {
+    renderProviderModelOptions(id);
+    return providerModelCatalogs.get(id);
+  }
+  try {
+    const response = await api('/api/providers/' + encodeURIComponent(id) + '/models');
+    const models = Array.isArray(response.models) ? response.models : [];
+    providerModelCatalogs.set(id, models);
+    renderProviderModelOptions(id);
+    return models;
+  } catch (error) {
+    if (force) toast('Não foi possível listar os modelos deste provedor: ' + error.message, true);
+    providerModelCatalogs.set(id, []);
+    renderProviderModelOptions(id);
+    return [];
+  }
+}
+
+function renderProviderModelOptions(id) {
+  const models = providerModelCatalogs.get(id) || [];
+  const options = models.map(model => '<option value="' + escapeHtml(model) + '"></option>').join('');
+  const chatOptions = $('#chat-model-options');
+  const providerOptions = $('#provider-model-options');
+  if (chatOptions) chatOptions.innerHTML = options;
+  if (providerOptions) providerOptions.innerHTML = options;
+}
+
+function setActiveChatModel(value) {
+  activeModelId = String(value || '').trim().slice(0, 200);
+  if (activeProviderId) {
+    try { localStorage.setItem('godmode-model:' + activeProviderId, activeModelId); } catch {}
+  }
+}
 async function loadProviders() {
   const result = await api('/api/providers');
   providers = result.providers || [];
@@ -335,26 +406,25 @@ async function refreshHealth() {
 }
 
 function renderProviders() {
-  const host = $('#provider-list') || $('#provider-cards');
+  const host = $('#provider-list');
   if (!host) return;
   host.innerHTML = providers.map(item => `
-    <article class="provider-card">
-      <div class="provider-card-head">
-        <div>
-          <div class="provider-name">${escapeHtml(item.name)}</div>
-          <div class="provider-kind">${item.kind === 'openrouter' ? 'OpenRouter' : 'API OpenAI-compatível'}</div>
+    <div class="provider-row" data-provider-row="${escapeHtml(item.id)}">
+      <div class="provider-row-main">
+        <span class="provider-mark">${item.id === 'omniroute' ? '◎' : item.id.includes('ollama') ? '◉' : '◇'}</span>
+        <div class="provider-row-copy">
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${escapeHtml(item.baseUrl)}</small>
+          <span>${escapeHtml(item.model || 'Modelo ainda não escolhido')}</span>
         </div>
-        <span class="status-pill ${item.model ? '' : 'off'}">${item.model ? 'Configurado' : 'Pendente'}</span>
       </div>
-      <div class="provider-url">${escapeHtml(item.baseUrl)}</div>
-      <div class="provider-model">Modelo: ${escapeHtml(item.model || 'não definido')}</div>
-      <div class="provider-kind">${item.hasSecret ? 'Chave configurada em memória' : 'Sem chave necessária ou pendente'}</div>
-      <div class="card-actions" style="margin-top:10px;">
+      <div class="provider-row-state"><span class="status-pill ${item.model ? 'status-connected' : 'off'}">${item.model ? 'Configurado' : 'Sem modelo'}</span><small>${item.hasSecret ? 'Chave salva nesta sessão' : 'Sem chave / não configurada'}</small></div>
+      <div class="provider-row-actions">
         <button class="button secondary small" data-edit-provider="${escapeHtml(item.id)}">Configurar</button>
-        <button class="button secondary small" data-discover-provider="${escapeHtml(item.id)}">Buscar Modelos</button>
-        <button class="button secondary small" data-delete-provider="${escapeHtml(item.id)}">Excluir</button>
+        <button class="button secondary small" data-discover-provider="${escapeHtml(item.id)}">Modelos</button>
+        <button class="button subtle-danger small" data-delete-provider="${escapeHtml(item.id)}" title="Excluir provedor">×</button>
       </div>
-    </article>`).join('') || '<div class="empty-inline">Nenhum provedor cadastrado.</div>';
+    </div>`).join('') || '<div class="empty-inline">Nenhum provedor cadastrado.</div>';
 
   $$('[data-edit-provider]', host).forEach(button => button.addEventListener('click', () => editProvider(button.dataset.editProvider)));
   $$('[data-discover-provider]', host).forEach(button => button.addEventListener('click', () => discoverProvider(button.dataset.discoverProvider)));
@@ -364,14 +434,28 @@ function renderProviders() {
 
 function openProviderForm(provider = null) {
   editingProviderId = provider?.id || null;
-  $('#provider-form-title').textContent = provider ? `Editar ${provider.name}` : 'Cadastrar Provedor';
+  $('#provider-form-title').textContent = provider ? `Editar ${provider.name}` : 'Cadastrar provedor';
   $('#provider-id').value = provider?.id || '';
   $('#provider-id').disabled = Boolean(provider);
   $('#provider-name').value = provider?.name || '';
   $('#provider-url').value = provider?.baseUrl || 'http://127.0.0.1:11434/v1';
   $('#provider-model').value = provider?.model || '';
+  if ($('#provider-secret')) $('#provider-secret').value = '';
   $('#provider-form-wrap').hidden = false;
+  renderProviderModelOptions(provider?.id || activeProviderId);
   $('#provider-name').focus();
+}
+
+function setupOmniRouteProvider() {
+  const existing = providers.find(item => item.id === 'omniroute');
+  openProviderForm(existing || null);
+  if (!existing) {
+    $('#provider-id').value = 'omniroute';
+    $('#provider-name').value = 'OmniRoute';
+    $('#provider-url').value = 'http://127.0.0.1:20128/v1';
+    $('#provider-model').value = 'auto/coding';
+  }
+  toast('Informe sua chave do OmniRoute. O serviço precisa estar iniciado em 127.0.0.1:20128.');
 }
 
 function editProvider(id) {
@@ -384,28 +468,33 @@ async function removeProvider(id) {
   try {
     const result = await api(`/api/providers/${encodeURIComponent(id)}`, { method: 'DELETE' });
     providers = result.providers;
+    providerModelCatalogs.delete(id);
+    if (activeProviderId === id) {
+      activeProviderId = '';
+      activeModelId = '';
+    }
     renderProviders();
     toast('Provedor removido.');
   } catch (error) { toast(error.message, true); }
 }
 
 async function discoverProvider(id) {
-  try {
-    const result = await api(`/api/providers/${encodeURIComponent(id)}/models`);
-    const provider = providers.find(item => item.id === id);
-    openProviderForm(provider || null);
-    if (result.models && result.models.length) {
-      $('#provider-model').value = result.models[0];
-      toast(`${result.models.length} modelos encontrados. Primeiro selecionado.`);
-    } else {
-      toast('Nenhum modelo listado automaticamente.', true);
-    }
-  } catch (error) { toast(error.message, true); }
+  const provider = providers.find(item => item.id === id);
+  if (provider) openProviderForm(provider);
+  const models = await loadProviderModelCatalog(id, true);
+  if (models.length) {
+    toast(models.length + ' modelos encontrados. Digite para filtrar ou escolha na lista.');
+    $('#provider-model')?.focus();
+    if (provider && !$('#provider-model').value) $('#provider-model').value = models[0];
+  } else {
+    toast('Nenhum modelo foi listado. Você ainda pode digitar o identificador manualmente.', true);
+  }
 }
 
 async function submitProvider(event) {
   event.preventDefault();
   const id = $('#provider-id').value.trim().toLowerCase();
+  const secret = $('#provider-secret')?.value || '';
   const data = {
     id,
     name: $('#provider-name').value.trim(),
@@ -415,14 +504,21 @@ async function submitProvider(event) {
   };
   try {
     await api('/api/providers', { method: 'POST', body: JSON.stringify(data) });
+    if (secret.trim()) {
+      await api('/api/providers/' + encodeURIComponent(id) + '/secret', {
+        method:'POST',
+        body:JSON.stringify({ secret:secret.trim() })
+      });
+    }
     await loadProviders();
     activeProviderId = id;
+    activeModelId = data.model;
+    if (activeModelId) localStorage.setItem('godmode-model:' + id, activeModelId);
     updateProviderSelect();
     $('#provider-form-wrap').hidden = true;
     toast('Provedor salvo com sucesso.');
   } catch (error) { toast(error.message, true); }
 }
-
 function messagesForModel(messages) {
   const selected = [];
   let remaining = 90000;
@@ -447,7 +543,8 @@ async function sendMessage(event) {
   if (isSending || pendingApproval) return;
   const provider = providers.find(item => item.id === activeProviderId);
   if (!provider) { toast('Cadastre ou selecione um provedor de IA.', true); setView('providers'); return; }
-  if (!provider.model) { toast('Configure o identificador do modelo antes de conversar.', true); setView('providers'); editProvider(provider.id); return; }
+  const modelToUse = ($('#chat-model')?.value || activeModelId || provider.model || '').trim();
+  if (!modelToUse) { toast('Digite ou selecione um modelo para conversar.', true); setView('providers'); editProvider(provider.id); return; }
 
   const rawText = $('#chat-input').value.trim();
   if (!rawText && !pendingAttachments.length) return;
@@ -529,6 +626,7 @@ async function sendMessage(event) {
         method: 'POST',
         body: JSON.stringify({
           providerId: activeProviderId,
+          model: modelToUse,
           projectId: activeProjectId,
           messages: payloadMessages,
           toolsEnabled: $('#tools-toggle').checked
@@ -1520,6 +1618,7 @@ function renderProjectSelector() {
   }
   const statusProject = $('#statusbar-project');
   if (statusProject) statusProject.textContent = projects.find(p => p.id === activeProjectId)?.name || 'Workspace local';
+  renderSidebarProjects();
 }
 
 async function selectProject(id) {
@@ -2105,7 +2204,16 @@ if (composerForm) {
   });
 }
 
-$('#chat-provider')?.addEventListener('change', event => { activeProviderId = event.target.value; });
+$('#chat-provider')?.addEventListener('change', event => {
+  activeProviderId = event.target.value;
+  const provider = providers.find(item => item.id === activeProviderId);
+  activeModelId = localStorage.getItem('godmode-model:' + activeProviderId) || provider?.model || '';
+  if ($('#chat-model')) $('#chat-model').value = activeModelId;
+  void loadProviderModelCatalog(activeProviderId, true);
+});
+$('#chat-model')?.addEventListener('input', event => setActiveChatModel(event.target.value));
+$('#chat-model')?.addEventListener('change', event => setActiveChatModel(event.target.value));
+$('#refresh-chat-models')?.addEventListener('click', () => void loadProviderModelCatalog(activeProviderId, true));
 $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
   $('#chat-input').value = button.dataset.prompt;
   autoResizeInput();
@@ -2113,12 +2221,13 @@ $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
 }));
 
 $('#add-provider')?.addEventListener('click', () => openProviderForm());
+$('#setup-omniroute')?.addEventListener('click', setupOmniRouteProvider);
 $('#close-provider-form')?.addEventListener('click', () => { $('#provider-form-wrap').hidden = true; });
 $('#provider-form')?.addEventListener('submit', submitProvider);
 $('#discover-models')?.addEventListener('click', async () => {
   const id = $('#provider-id').value.trim().toLowerCase();
   if (!providers.some(item => item.id === id)) {
-    toast('Salve o provedor primeiro para buscar os modelos.', true);
+    toast('Salve o provedor primeiro para buscar os modelos. Você pode digitar um ID manualmente.', true);
     return;
   }
   await discoverProvider(id);
