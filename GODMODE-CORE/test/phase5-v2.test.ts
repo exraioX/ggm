@@ -65,6 +65,34 @@ test('task-queue: adiciona, lista, atualiza e remove tarefas sequenciais', () =>
   assert.equal(taskQueue.get(task.id), undefined);
 });
 
+
+test('task-queue: retry limpa resultado anterior e clear respeita projeto', () => {
+  const projectId = 'queue-clear-project-' + Date.now();
+  const otherProjectId = 'queue-other-project-' + Date.now();
+  const globalTask = taskQueue.add('Tarefa global de referência');
+  const projectTask = taskQueue.add('Tarefa do projeto que será limpa', 'coder', projectId);
+  const otherTask = taskQueue.add('Tarefa de outro projeto', 'tester', otherProjectId);
+
+  try {
+    taskQueue.updateStatus(projectTask.id, 'failed', 'resultado antigo', 'erro antigo');
+    const retried = taskQueue.retry(projectTask.id);
+    assert.equal(retried.status, 'pending');
+    assert.equal(retried.result, undefined);
+    assert.equal(retried.error, undefined);
+    assert.equal(retried.startedAt, undefined);
+    assert.equal(retried.completedAt, undefined);
+
+    taskQueue.clear(projectId);
+    assert.equal(taskQueue.get(projectTask.id), undefined);
+    assert.ok(taskQueue.get(globalTask.id), 'tarefas globais devem ser preservadas');
+    assert.ok(taskQueue.get(otherTask.id), 'tarefas de outros projetos devem ser preservadas');
+  } finally {
+    taskQueue.remove(globalTask.id);
+    taskQueue.remove(projectTask.id);
+    taskQueue.remove(otherTask.id);
+  }
+});
+
 test('auto-setup: registra servidores MCP gratuitos sem duplicar existentes', async () => {
   const result = await runAutoSetup();
   assert.ok(typeof result.alreadyDone === 'boolean');
