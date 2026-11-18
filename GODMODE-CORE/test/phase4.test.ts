@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { processSandbox } from '../src/sandbox.js';
-import { testRunner } from '../src/test-runner.js';
+import { testRunner, parseCommandLine } from '../src/test-runner.js';
 import { mcpMarketplace } from '../src/mcp-marketplace.js';
 import { multiAgentOrchestrator, SPECIALISTS } from '../src/multi-agent.js';
 
@@ -46,6 +46,18 @@ test('testRunner: gerencia configuração e diagnostica falhas', () => {
 
   const reloaded = testRunner.getConfig(pId);
   assert.equal(reloaded.testCommand, 'npm run test:unit');
+});
+
+test('testRunner: interpreta aspas e preserva caminhos Windows', () => {
+  assert.deepEqual(
+    parseCommandLine('npm.cmd test -- --config "C:\\Users\\Vagner\\Meu Projeto\\jest.config.js"'),
+    ['npm.cmd', 'test', '--', '--config', 'C:\\Users\\Vagner\\Meu Projeto\\jest.config.js'],
+  );
+  assert.deepEqual(
+    parseCommandLine('node -e "console.log(\\\"hello world\\\")"'),
+    ['node', '-e', 'console.log("hello world")'],
+  );
+  assert.throws(() => parseCommandLine('node "argumento sem fechar'), /aspas não fechadas/);
 });
 
 test('mcpMarketplace: lista catálogo com filtros e verifica entradas', () => {
