@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Typecheck and tests
+    name: Typecheck, tests and app smoke test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -50,3 +50,24 @@ jobs:
 
       - name: Unit and smoke tests
         run: npm test
+
+      - name: Start app and smoke-test HTTP routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT=18765 HOST=127.0.0.1 npm start > /tmp/godmode-core.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:18765/api/health > /tmp/godmode-health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          node -e "const h=require('/tmp/godmode-health.json'); if(!h.ok || h.name!=='GODMODE CORE') process.exit(1); console.log('Health OK:', h.name, h.port)"
+          curl --silent --show-error --fail http://127.0.0.1:18765/api/research/cases > /tmp/godmode-cases.json
+          node -e "const d=require('/tmp/godmode-cases.json'); if(!Array.isArray(d.cases) || d.cases.length<5) process.exit(1); console.log('Research cases OK:', d.cases.length)"
+          curl --silent --show-error --fail http://127.0.0.1:18765/research.html | grep -q "Research Lab"
+          echo "Research Lab HTML OK"
