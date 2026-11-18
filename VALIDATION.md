@@ -74,3 +74,33 @@ A revisão de produto e código consolidou fluxos que antes estavam separados:
 - [ ] Inicialização no Windows, conexão real com modelo, execução de comandos no projeto do usuário e consultas a servidores MCP externos ainda dependem de teste no computador de destino.
 
 A aprovação acima corresponde ao commit `472fddc` e a todas as mudanças de código desta auditoria; o commit de documentação deste arquivo não altera o código testado. A validação do GitHub Actions cobre typecheck e testes automatizados, mas não substitui o teste visual no navegador nem a conexão com provedores e servidores MCP reais.
+
+## Atualização de interface, modelos e OmniRoute — 18 de novembro de 2026
+
+- [x] Barra lateral reorganizada em Chat, Arquivos, Agentes, Plugins, Modelos, Projetos e conversas recentes.
+- [x] Telas de projetos e especialistas convertidas de grade de cartões para listas compactas.
+- [x] Plugins reorganizados em Descobrir, Instalados, Marketplaces e Erros, com busca, lista e painel de detalhes.
+- [x] Recursos MCP avançados mantidos em área expansível, incluindo importação JSON, servidores, tools, resources e prompts.
+- [x] Campo de modelo no Chat com datalist, busca por prefixo e entrada manual.
+- [x] Descoberta do Ollama usa `/v1/models` e, somente para endpoints Ollama em loopback, fallback para `/api/tags`.
+- [x] Modelo selecionado é encaminhado às chamadas do Chat, workflows multiagente e execução da fila.
+- [x] OmniRoute pode ser cadastrado como provedor OpenAI-compatible em `http://127.0.0.1:20128/v1`; a chave é mantida em memória no backend.
+- [x] Documentados no README e na tela de provedores os passos de instalação/uso do OmniRoute.
+- [ ] Integração de produto chamada “Rotaz AI” não foi incluída: a pesquisa não identificou com segurança qual projeto o nome representa. A tela/README não inventam compatibilidade com produtos diferentes.
+
+### Regressões e CI
+
+- GitHub Actions run [#44332964343](https://github.com/exraioX/ggm/actions/runs/44332964343), no commit de código `1abfcd1`: concluído com sucesso.
+- `npm ci`: aprovado.
+- `npm run typecheck`: aprovado.
+- `npm test`: **44 testes aprovados, 0 falhas, 0 cancelados e 0 ignorados**.
+- JavaScript da interface validado sintaticamente e HTML conferido para IDs duplicados e destinos de navegação ausentes.
+
+### Ainda depende do computador de destino
+
+- [ ] Teste visual/funcional no navegador do Windows (interações, responsividade e autocomplete real em Chromium).
+- [ ] Conexão com uma instância real do Ollama e confirmação de modelos Qwen instalados.
+- [ ] Conexão com o gateway OmniRoute, credencial real, provedor upstream e modelo roteado.
+- [ ] Teste de conexão de servidores MCP externos e validação de recursos/prompts de servidores reais.
+
+A aprovação do CI atesta instalação, typecheck e testes automatizados no runner Linux. Ela não substitui os testes de integração com os serviços locais do usuário.
