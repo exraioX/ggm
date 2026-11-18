@@ -458,7 +458,7 @@ function setupOmniRouteProvider() {
     $('#provider-id').value = 'omniroute';
     $('#provider-name').value = 'OmniRoute';
     $('#provider-url').value = 'http://127.0.0.1:20128/v1';
-    $('#provider-model').value = 'auto/coding';
+    $('#provider-model').value = 'auto';
   }
   toast('Informe sua chave do OmniRoute. O serviço precisa estar iniciado em 127.0.0.1:20128.');
 }
@@ -2498,7 +2498,7 @@ $('#run-task-queue')?.addEventListener('click', runTaskQueue);
 $('#clear-task-queue')?.addEventListener('click', clearTaskQueue);
 $('#test-config-form')?.addEventListener('submit', saveTestRunnerConfig);
 $$('[data-run-suite]').forEach(button => button.addEventListener('click', () => runProjectSuite(button.dataset.runSuite, button)));
-$('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
+$$('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
   pluginTab = button.dataset.pluginTab || 'discover';
   selectedPluginKey = '';
   renderPluginManager();
@@ -2552,7 +2552,6 @@ async function init() {
     await Promise.all([
       loadProjects(),
       loadProviders(),
-      loadMcp(),
       loadMemories(),
       refreshSystem(),
       refreshHealth(),
