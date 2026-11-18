@@ -49,13 +49,27 @@ interface ErrorEvent extends BaseEvent {
   message: string;
 }
 
+interface WorkflowStepEvent extends BaseEvent {
+  type: 'workflow_step';
+  workflowId: string;
+  stepId: string;
+  stepIndex: number;
+  totalSteps: number;
+  specialist: string;
+  status: 'running' | 'completed' | 'failed';
+  instruction: string;
+  output?: string;
+  durationMs?: number;
+}
+
 export type MonitorEvent =
   | AgentStartEvent
   | ToolCallEvent
   | ToolResultEvent
   | TokenUsageEvent
   | AgentDoneEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | WorkflowStepEvent;
 
 // ============================================================
 // Classe Monitor
