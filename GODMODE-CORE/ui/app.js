@@ -108,7 +108,7 @@ function setView(view) {
   if (view === 'taskqueue') view = 'agents';
   if (view === 'monitor') view = 'workspace';
 
-  $('.nav-item, .sidebar-link').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  $$('.nav-item, .sidebar-link').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach(section => section.classList.toggle('active', section.id === `view-${view}`));
   $('#page-title').textContent = VIEW_TITLES[view] || 'LUPID';
   $('#breadcrumb').textContent = `LUPID / ${(VIEW_TITLES[view] || view).toUpperCase()}`;
