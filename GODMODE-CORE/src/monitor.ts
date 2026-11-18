@@ -58,7 +58,7 @@ interface WorkflowStepEvent extends BaseEvent {
   stepIndex: number;
   totalSteps: number;
   specialist: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed';
   instruction: string;
   output?: string;
   durationMs?: number;
