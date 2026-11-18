@@ -2239,7 +2239,7 @@ async function runTaskQueue() {
   try {
     const response = await api('/api/tasks/run', {
       method:'POST',
-      body:JSON.stringify({ projectId:activeProjectId || undefined, providerId:activeProviderId || undefined })
+      body:JSON.stringify({ projectId:activeProjectId || undefined, providerId:activeProviderId || undefined, model:activeModelId || undefined })
     });
     await loadTaskQueue();
     const summary = response.stats || {};
