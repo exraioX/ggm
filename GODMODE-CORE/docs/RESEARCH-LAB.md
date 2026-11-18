@@ -49,5 +49,5 @@ Runs and custom test cases are stored locally in ~/.godmode/research.json. Each 
 - A not-contains evaluator checks a literal synthetic marker, not semantic disclosure.
 - A passing result is not a security guarantee.
 - The built-in tests are starter cases, not a comprehensive benchmark.
-- Long experiments continue inside the local GODMODE CORE process; stopping the process stops in-flight work.
+- Long experiments continue inside the local GODMODE CORE process; stopping the process stops in-flight work. When the Core starts again, previously running records are marked cancelled rather than appearing permanently active.
 - Use only models and services you own or have permission to assess.

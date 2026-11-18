@@ -153,6 +153,19 @@ function persist() {
   safeWriteJson(STORE_PATH, store);
 }
 
+// A process restart interrupts in-flight calls; mark them cancelled instead of
+// leaving runs permanently stuck in the running state.
+if (store.runs.some(run => run.status === 'running')) {
+  for (const run of store.runs) {
+    if (run.status === 'running') {
+      run.status = 'cancelled';
+      run.cancelRequested = true;
+      run.completedAt = new Date().toISOString();
+    }
+  }
+  persist();
+}
+
 function getCase(id: string): ResearchCase | undefined {
   return BUILTIN_CASES.find(item => item.id === id) || store.customCases.find(item => item.id === id);
 }
@@ -282,18 +295,21 @@ async function executeRun(runId: string) {
 researchRouter.get('/overview', (_req, res) => {
   const allResults = store.runs.flatMap(run => run.results);
   const summary = summarizeVerdicts(allResults.map(effectiveVerdict));
-  const modelMap = new Map<string, { providerId: string; model: string; runs: number; pass: number; fail: number; review: number; error: number; latencyTotal: number }>();
+  const modelMap = new Map<string, { providerId: string; model: string; runs: number; pass: number; fail: number; review: number; error: number; latencyTotal: number; latencySamples: number }>();
   for (const result of allResults) {
     const key = result.providerId + '::' + result.model;
-    const current = modelMap.get(key) || { providerId: result.providerId, model: result.model, runs: 0, pass: 0, fail: 0, review: 0, error: 0, latencyTotal: 0 };
+    const current = modelMap.get(key) || { providerId: result.providerId, model: result.model, runs: 0, pass: 0, fail: 0, review: 0, error: 0, latencyTotal: 0, latencySamples: 0 };
     current.runs += 1;
     current[effectiveVerdict(result)] += 1;
-    current.latencyTotal += result.latencyMs;
+    if (result.latencyMs > 0) {
+      current.latencyTotal += result.latencyMs;
+      current.latencySamples += 1;
+    }
     modelMap.set(key, current);
   }
   const models = [...modelMap.values()].map(item => ({
     ...item,
-    averageLatencyMs: item.runs ? Math.round(item.latencyTotal / item.runs) : 0,
+    averageLatencyMs: item.latencySamples ? Math.round(item.latencyTotal / item.latencySamples) : 0,
     passRate: item.pass + item.fail ? Math.round(item.pass / (item.pass + item.fail) * 1000) / 10 : null,
   })).sort((a, b) => (b.passRate ?? -1) - (a.passRate ?? -1));
   res.json({
