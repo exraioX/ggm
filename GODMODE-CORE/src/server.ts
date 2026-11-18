@@ -468,21 +468,97 @@ app.post('/api/mcp/marketplace/toggle/:name', async (req, res) => {
 });
 
 // Multi-Agent System (Specialists & Workflow)
+async function executeQueuedTask(taskId: string, providerId?: string) {
+  const task = taskQueue.get(taskId);
+  if (!task) throw new Error('Tarefa não encontrada.');
+  if (task.status === 'running') throw new Error('Esta tarefa já está em execução.');
+
+  const project = task.projectId ? projectManager.get(task.projectId) : projectManager.getActive();
+  if (!project) {
+    taskQueue.updateStatus(taskId, 'failed', undefined, 'O projeto associado à tarefa não está mais disponível.');
+    throw new Error('O projeto associado à tarefa não está mais disponível.');
+  }
+
+  const supportedRoles = new Set(['auto', 'orchestrator', 'coder', 'researcher', 'reviewer', 'tester', 'architect', 'reverse_engineer']);
+  const role = supportedRoles.has(task.agentRole) ? task.agentRole as 'auto' | 'orchestrator' | 'coder' | 'researcher' | 'reviewer' | 'tester' | 'architect' | 'reverse_engineer' : 'auto';
+  taskQueue.updateStatus(taskId, 'running');
+
+  try {
+    const result = await multiAgentOrchestrator.runWorkflow(task.instruction, {
+      role,
+      providerId,
+      projectName: project.name,
+      onStepUpdate: (step, stepIndex, totalSteps, workflowId) => {
+        monitor.emit({
+          type: 'workflow_step',
+          agentId: step.specialist,
+          sessionId: workflowId,
+          workflowId,
+          stepId: step.id,
+          stepIndex,
+          totalSteps,
+          specialist: step.specialist,
+          status: step.status,
+          instruction: step.instruction.slice(0, 500),
+          output: step.output?.slice(0, 1200),
+          durationMs: step.durationMs,
+        });
+      },
+    });
+
+    const failureSummary = result.steps
+      .filter(step => step.status === 'failed')
+      .map(step => step.specialist + ': ' + (step.output || 'falha sem detalhes'))
+      .join('\n');
+    taskQueue.updateStatus(
+      taskId,
+      result.success ? 'completed' : 'failed',
+      result.finalSynthesis || failureSummary,
+      result.success ? undefined : (failureSummary || result.failedSteps + ' etapa(s) falharam.'),
+    );
+
+    return { task: taskQueue.get(taskId), result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    taskQueue.updateStatus(taskId, 'failed', undefined, message);
+    throw error;
+  }
+}
+
 app.get('/api/agents/specialists', (_req, res) => {
   res.json({ specialists: multiAgentOrchestrator.listSpecialists() });
 });
 app.post('/api/agents/workflow/plan', (req, res) => {
-  const task = typeof req.body?.task === 'string' ? req.body.task : '';
+  const task = typeof req.body?.task === 'string' ? req.body.task.trim() : '';
   if (!task) { res.status(400).json({ error: 'Informe a tarefa para o workflow multiagente.' }); return; }
   res.json({ steps: multiAgentOrchestrator.planWorkflow(task) });
 });
 app.post('/api/agents/workflow/run', async (req, res) => {
-  const task = typeof req.body?.task === 'string' ? req.body.task : '';
-  if (!task) { res.status(400).json({ error: 'Informe a tarefa para o workflow multiagente.' }); return; }
+  const instruction = typeof req.body?.task === 'string' ? req.body.task.trim() : '';
+  if (!instruction) { res.status(400).json({ error: 'Informe a tarefa para o workflow multiagente.' }); return; }
+
+  const agentRole = typeof req.body?.agentRole === 'string' ? req.body.agentRole : 'auto';
+  const validRoles = ['auto', 'orchestrator', 'coder', 'researcher', 'reviewer', 'tester', 'architect', 'reverse_engineer'];
+  if (!validRoles.includes(agentRole)) { res.status(400).json({ error: 'Especialista inválido.' }); return; }
+
+  const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : projectManager.getActive().id;
+  const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : undefined;
+  const queued = taskQueue.add(instruction, agentRole, projectId);
+
   try {
-    const result = await multiAgentOrchestrator.runWorkflow(task);
-    res.json({ ok: true, result });
-  } catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : String(error) }); }
+    const execution = await executeQueuedTask(queued.id, providerId);
+    res.status(execution.result.success ? 200 : 502).json({
+      ok: execution.result.success,
+      task: execution.task,
+      result: execution.result,
+    });
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      task: taskQueue.get(queued.id),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 });
 app.get('/api/providers', (_req, res) => res.json({ providers: providerRegistry.list() }));
 app.post('/api/providers', (req, res) => {
@@ -946,25 +1022,66 @@ app.post('/api/chat/complexity', requireLocalApp, (req, res) => {
 });
 
 // ============================================================
-// Task Queue API
-// ============================================================
-
+// Task Queue API — usa o mesmo executor do workflow direto.
 app.get('/api/tasks', requireLocalApp, (req, res) => {
   const projectId = typeof req.query?.projectId === 'string' ? req.query.projectId : undefined;
-  res.json({ tasks: taskQueue.list(projectId), stats: taskQueue.stats() });
+  res.json({ tasks: taskQueue.list(projectId), stats: taskQueue.stats(projectId) });
 });
 
 app.post('/api/tasks', requireLocalApp, (req, res) => {
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
   const agentRole = typeof req.body?.agentRole === 'string' ? req.body.agentRole : 'auto';
   const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
+  const allowedRoles = ['auto', 'orchestrator', 'coder', 'researcher', 'reviewer', 'tester', 'architect', 'reverse_engineer'];
   if (!instruction) { res.status(400).json({ error: 'Informe a instrução da tarefa.' }); return; }
+  if (!allowedRoles.includes(agentRole)) { res.status(400).json({ error: 'Especialista inválido.' }); return; }
   const task = taskQueue.add(instruction, agentRole, projectId);
-  res.json({ ok: true, task, stats: taskQueue.stats() });
+  res.json({ ok: true, task, stats: taskQueue.stats(projectId) });
+});
+
+app.post('/api/tasks/:id/run', requireLocalApp, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : undefined;
+  try {
+    const execution = await executeQueuedTask(id, providerId);
+    res.status(execution.result.success ? 200 : 502).json({ ok: execution.result.success, ...execution });
+  } catch (error) {
+    res.status(502).json({ ok: false, task: taskQueue.get(id), error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/tasks/run', requireLocalApp, async (req, res) => {
+  const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : projectManager.getActive().id;
+  const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : undefined;
+  const pending = taskQueue.list(projectId).filter(task => task.status === 'pending');
+  const results: Array<{ task: ReturnType<typeof taskQueue.get>; result?: unknown; error?: string }> = [];
+
+  for (const task of pending) {
+    try {
+      results.push(await executeQueuedTask(task.id, providerId));
+    } catch (error) {
+      results.push({ task: taskQueue.get(task.id), error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  const stats = taskQueue.stats(projectId);
+  res.json({ ok: stats.failed === 0, results, stats });
+});
+
+app.post('/api/tasks/:id/retry', requireLocalApp, (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  try {
+    const task = taskQueue.retry(id);
+    res.json({ ok: true, task });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.delete('/api/tasks/:id', requireLocalApp, (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const task = taskQueue.get(id);
+  if (task?.status === 'running') { res.status(409).json({ error: 'Não é possível remover uma tarefa em execução.' }); return; }
   taskQueue.remove(id);
   res.json({ ok: true, stats: taskQueue.stats() });
 });
@@ -972,14 +1089,14 @@ app.delete('/api/tasks/:id', requireLocalApp, (req, res) => {
 app.post('/api/tasks/clear', requireLocalApp, (req, res) => {
   const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
   taskQueue.clear(projectId);
-  res.json({ ok: true, stats: taskQueue.stats() });
+  res.json({ ok: true, stats: taskQueue.stats(projectId) });
 });
 
-app.get('/api/tasks/stats', requireLocalApp, (_req, res) => {
-  res.json(taskQueue.stats());
+app.get('/api/tasks/stats', requireLocalApp, (req, res) => {
+  const projectId = typeof req.query?.projectId === 'string' ? req.query.projectId : undefined;
+  res.json(taskQueue.stats(projectId));
 });
 
-// ============================================================
 // Auto-Setup Status API
 // ============================================================
 
