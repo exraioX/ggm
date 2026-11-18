@@ -18,9 +18,7 @@
       <button type="button" class="activity-item nav-item" data-view="projects" title="Projetos" aria-label="Projetos"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H10l2 2h7.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z"/></svg><i class="activity-indicator"></i></button>
       <button type="button" class="activity-item nav-item" data-view="mcp" title="Extensões e MCP" aria-label="Extensões e MCP"><svg viewBox="0 0 24 24"><path d="M9 3.5a2.5 2.5 0 1 0-5 0V7H2.5a2.5 2.5 0 1 0 0 5H4v3.5a2 2 0 0 0 2 2h3.5v-1a2.5 2.5 0 1 1 5 0v1H18a2 2 0 0 0 2-2V12h1.5a2.5 2.5 0 1 0 0-5H20V5a2 2 0 0 0-2-2h-4v.5a2.5 2.5 0 1 1-5 0Z"/></svg><i class="activity-indicator"></i></button>
       <button type="button" class="activity-item nav-item" data-view="memory" title="Memória" aria-label="Memória"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg><i class="activity-indicator"></i></button>
-      <button type="button" class="activity-item nav-item" data-view="monitor" title="Monitor" aria-label="Monitor"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><i class="activity-indicator"></i></button>
       <button type="button" class="activity-item nav-item" data-view="workspace" title="Terminal e Área de Trabalho" aria-label="Terminal"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><i class="activity-indicator"></i></button>
-      <button type="button" class="activity-item nav-item" data-view="taskqueue" title="Fila de Tarefas" aria-label="Fila de Tarefas"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 .8.8L6 5m-2.5 7 .8.8L6 11m-2.5 7 .8.8L6 17"/></svg><i class="activity-indicator"></i></button>
     </div>
     <div class="activity-bottom">
       <button type="button" class="activity-item nav-item" data-view="providers" title="Provedores de IA" aria-label="Provedores de IA"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3M9 10h6v4H9z"/></svg><i class="activity-indicator"></i></button>
@@ -159,34 +157,92 @@
       <section id="view-agents" class="view">
         <div class="view-intro">
           <div>
-            <h2>Orquestração Multiagente (7 Especialistas)</h2>
-            <p>O Orquestrador Principal coordena especialistas dedicados: Programador, Pesquisador, Revisor, QA, Arquiteto e Engenharia Reversa.</p>
+            <h2>Orquestrador de Missões</h2>
+            <p>Planeje e execute uma missão com especialistas, acompanhe a fila e valide o projeto no mesmo lugar.</p>
           </div>
+          <span class="status-pill">CENTRO DE AGENTES</span>
         </div>
 
-        <div class="panel" style="margin-bottom:18px;">
-          <div class="panel-heading">
-            <div>
-              <h3>Disparar Workflow Multiagente</h3>
-              <p>Descreva uma missão complexa. O orquestrador planejará os passos e acionará os especialistas de forma cooperativa.</p>
+        <div class="agent-center-grid">
+          <section class="panel mission-composer">
+            <div class="panel-heading">
+              <div><h3>Nova missão</h3><p>Uma única entrada para execução imediata ou fila sequencial.</p></div>
+              <span class="count-pill">WORKFLOW</span>
             </div>
-          </div>
-          <form id="workflow-form" style="display:flex;gap:10px;margin-top:10px;">
-            <input id="workflow-task-input" class="input" style="flex:1;" placeholder="Ex: Criar uma suíte de testes unitários para o módulo de segurança e revisar potenciais falhas..." required>
-            <button id="workflow-submit-btn" class="button primary" type="submit">Executar Workflow</button>
-          </form>
-          <div id="workflow-progress" style="margin-top:14px;" hidden>
-            <h4 style="margin:0 0 10px 0;font-size:13px;color:var(--accent);">Progresso das Etapas:</h4>
-            <div id="workflow-steps-list" class="workflow-steps-list"></div>
-            <div id="workflow-synthesis" class="workflow-synthesis panel" style="margin-top:14px;background:#0b141d;" hidden>
-              <div class="panel-heading"><h4>Síntese Consolidada do Orquestrador</h4></div>
-              <pre id="workflow-synthesis-content" style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--text);"></pre>
+            <form id="workflow-form" class="mission-form">
+              <textarea id="workflow-task-input" rows="4" maxlength="6000" placeholder="Descreva o resultado desejado. Ex.: audite a autenticação, corrija os riscos encontrados e execute os testes." required></textarea>
+              <div class="mission-form-footer">
+                <label class="mission-role-picker">
+                  <span>Especialista responsável</span>
+                  <select id="workflow-agent-role" class="select">
+                    <option value="auto">Orquestrador automático</option>
+                    <option value="orchestrator">Orquestrador</option>
+                    <option value="coder">Programador</option>
+                    <option value="researcher">Pesquisador</option>
+                    <option value="reviewer">Revisor</option>
+                    <option value="tester">QA / Testador</option>
+                    <option value="architect">Arquiteto</option>
+                    <option value="reverse_engineer">Engenharia reversa</option>
+                  </select>
+                </label>
+                <div class="mission-actions">
+                  <button id="queue-workflow-btn" class="button secondary" type="button">Adicionar à fila</button>
+                  <button id="workflow-submit-btn" class="button primary" type="submit">Executar agora</button>
+                </div>
+              </div>
+            </form>
+            <div class="workflow-execution-note">Os perfis trabalham em sequência usando o provedor selecionado. Esta modalidade de workflow não executa ferramentas MCP/nativas por conta própria; use o Chat do Agente para operações com ferramentas e aprovações.</div>
+            <div id="workflow-progress" class="workflow-progress" hidden>
+              <div class="workflow-progress-heading"><h4>Etapas da missão</h4><span id="workflow-progress-summary" class="count-pill">Aguardando</span></div>
+              <div id="workflow-steps-list" class="workflow-steps-list"></div>
+              <div id="workflow-synthesis" class="workflow-synthesis panel" hidden>
+                <div class="panel-heading"><h4>Resultado consolidado</h4></div>
+                <pre id="workflow-synthesis-content"></pre>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="panel queue-panel">
+            <div class="panel-heading">
+              <div><h3>Fila de execução</h3><p id="task-queue-count">0 tarefas</p></div>
+              <div class="queue-actions">
+                <button id="run-task-queue" class="button primary small">Executar pendentes</button>
+                <button id="clear-task-queue" class="button secondary small">Limpar</button>
+              </div>
+            </div>
+            <div id="task-queue-stats" class="queue-stats"></div>
+            <div id="task-queue-list" class="task-queue-list">
+              <div class="empty-inline">Nenhuma tarefa na fila. Adicione uma missão acima.</div>
+            </div>
+          </section>
         </div>
+
+        <section class="panel test-runner-panel">
+          <div class="panel-heading">
+            <div><h3>Validação do projeto</h3><p>Execute testes, lint e verificação de tipos no workspace ativo, com saída e diagnósticos.</p></div>
+            <span id="test-runner-status" class="status-pill">PRONTO</span>
+          </div>
+          <div class="test-runner-actions">
+            <button type="button" class="button primary small" data-run-suite="test">▶ Executar testes</button>
+            <button type="button" class="button secondary small" data-run-suite="build">Verificar tipos / build</button>
+            <button type="button" class="button secondary small" data-run-suite="lint">Executar lint</button>
+            <details class="test-config-details">
+              <summary>Configurar comandos</summary>
+              <form id="test-config-form" class="test-config-form">
+                <label>Comando de testes<input id="test-command" class="input" placeholder="npm test"></label>
+                <label>Comando de lint<input id="lint-command" class="input" placeholder="npm run lint"></label>
+                <label>Comando de build / typecheck<input id="build-command" class="input" placeholder="npm run typecheck"></label>
+                <label>Limite (segundos)<input id="test-timeout" class="input" type="number" min="5" max="600" value="60"></label>
+                <button class="button secondary small" type="submit">Salvar configurações</button>
+              </form>
+            </details>
+          </div>
+          <div id="test-runner-summary" class="test-runner-summary">Selecione uma suíte para validar o projeto ativo.</div>
+          <pre id="test-runner-output" class="test-runner-output">$ Aguardando execução...</pre>
+        </section>
 
         <div class="section-heading">
-          <div><h3>Roster dos 7 Especialistas</h3><p>Perfis cognitivos e diretrizes de atuação de cada agente.</p></div>
+          <div><h3>Especialistas disponíveis</h3><p>Perfis cognitivos usados pelo orquestrador. A execução acontece no provedor configurado.</p></div>
         </div>
         <div id="specialists-grid" class="mcp-server-grid"></div>
       </section>
@@ -274,6 +330,21 @@
             <div class="empty-inline">Conecte um servidor MCP para descobrir ferramentas.</div>
           </div>
         </div>
+        <div class="capability-grid">
+          <section class="panel capability-panel">
+            <div class="panel-heading"><div><h3>Resources MCP</h3><p>Recursos anunciados por servidores conectados.</p></div><span id="resources-count" class="count-pill">0 recursos</span></div>
+            <div id="mcp-resources-list" class="capability-list"><div class="empty-inline">Conecte um servidor MCP com resources.</div></div>
+          </section>
+          <section class="panel capability-panel">
+            <div class="panel-heading"><div><h3>Prompts MCP</h3><p>Modelos de prompt disponibilizados pelos servidores.</p></div><span id="prompts-count" class="count-pill">0 prompts</span></div>
+            <div id="mcp-prompts-list" class="capability-list"><div class="empty-inline">Conecte um servidor MCP com prompts.</div></div>
+          </section>
+        </div>
+        <section class="panel capability-output-panel">
+          <div class="panel-heading"><div><h3>Visualização de recurso / prompt</h3><p>Conteúdo retornado pelo servidor selecionado.</p></div></div>
+          <pre id="mcp-capability-output">Selecione um recurso ou prompt para consultar seu conteúdo.</pre>
+        </section>
+
       </section>
 
       <!-- VIEW 6: MEMÓRIA MULTI-NÍVEL -->
@@ -321,87 +392,34 @@
         </div>
       </section>
 
-      <!-- VIEW 7: MONITOR EM TEMPO REAL -->
-      <section id="view-monitor" class="view">
-        <div class="view-intro">
-          <div><h2>Monitor em Tempo Real</h2><p>Streaming SSE de eventos do agente: chamadas de ferramentas, tokens, duração e erros.</p></div>
-          <div style="display:flex;gap:8px;">
-            <button id="monitor-clear" class="button secondary small">Limpar Logs</button>
-            <span id="monitor-status" class="status-dot"></span>
-          </div>
-        </div>
-        <div class="monitor-stats" id="monitor-stats"></div>
-        <div id="monitor-feed" class="monitor-feed"></div>
-      </section>
-
       <!-- VIEW: ÁREA DE TRABALHO DO AGENTE -->
       <section id="view-workspace" class="view">
         <div class="view-intro">
-          <div>
-            <h2>Área de Trabalho do Agente</h2>
-            <p>Terminal em tempo real, diff ao vivo e fila de aprovações do agente.</p>
-          </div>
-          <div style="display:flex;gap:8px;">
+          <div><h2>Painel de Execução</h2><p>Autonomia, eventos em tempo real e saída do terminal em uma única visão operacional.</p></div>
+          <div class="execution-header-actions">
+            <span id="monitor-status" class="status-dot" title="Conexão do monitor"></span>
             <span id="agent-trust-badge" class="status-pill">Modo: Cauteloso</span>
-            <button id="clear-workspace-log" class="button secondary small">↺ Limpar Log</button>
+            <button id="monitor-clear" class="button secondary small">Limpar eventos</button>
           </div>
         </div>
-        <!-- Trust level selector -->
-        <div class="panel" style="margin-bottom:14px;">
-          <div class="panel-heading"><div><h3>Nível de Autonomia</h3><p>Define o quanto o agente pode executar sem pedir aprovação.</p></div></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <label class="trust-option"><input type="radio" name="trust-level" value="cautious" checked> <span class="trust-label trust-cautious">🔴 Cauteloso</span> <small>Toda alteração pede aprovação</small></label>
-            <label class="trust-option"><input type="radio" name="trust-level" value="assisted"> <span class="trust-label trust-assisted">🟡 Assistido</span> <small>Leitura livre, escrita pede confirmação</small></label>
-            <label class="trust-option"><input type="radio" name="trust-level" value="autonomous"> <span class="trust-label trust-autonomous">🟢 Autônomo</span> <small>Executa tudo, exceto delete e rede</small></label>
+        <section class="panel autonomy-panel">
+          <div class="panel-heading"><div><h3>Nível de autonomia</h3><p>Controla a preferência local de aprovação na interface do agente.</p></div></div>
+          <div class="trust-options">
+            <label class="trust-option"><input type="radio" name="trust-level" value="cautious" checked><span class="trust-label trust-cautious">Cauteloso</span><small>Toda alteração pede aprovação explícita</small></label>
+            <label class="trust-option"><input type="radio" name="trust-level" value="assisted"><span class="trust-label trust-assisted">Assistido</span><small>Leitura livre; escrita pede confirmação</small></label>
+            <label class="trust-option"><input type="radio" name="trust-level" value="autonomous"><span class="trust-label trust-autonomous">Autônomo</span><small>O agente ainda respeita as proteções do núcleo</small></label>
           </div>
-        </div>
-        <!-- Agent Action Log -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;">
-          <div class="panel" style="display:flex;flex-direction:column;overflow:hidden;">
-            <div class="panel-heading"><div><h3>📋 Log de Ações do Agente</h3><p>Cada ferramenta usada, com resultado e tempo.</p></div></div>
-            <div id="agent-action-log" class="monitor-feed" style="flex:1;"></div>
-          </div>
-          <div class="panel" style="display:flex;flex-direction:column;overflow:hidden;">
-            <div class="panel-heading"><div><h3>💻 Terminal (Saída ao Vivo)</h3><p>Saída dos comandos executados pelo agente.</p></div></div>
-            <div id="agent-terminal-output" style="flex:1;background:#050810;border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3e635;overflow-y:auto;white-space:pre-wrap;">$ Aguardando comandos do agente...</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW: FILA DE TAREFAS -->
-      <section id="view-taskqueue" class="view">
-        <div class="view-intro">
-          <div>
-            <h2>Fila de Tarefas do Agente</h2>
-            <p>Adicione tarefas e o agente as executa sequencialmente de forma autônoma.</p>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button id="run-task-queue" class="button primary small">▶ Iniciar Fila</button>
-            <button id="clear-task-queue" class="button secondary small">× Limpar</button>
-          </div>
-        </div>
-        <div class="panel" style="margin-bottom:14px;">
-          <div class="panel-heading"><div><h3>Nova Tarefa</h3><p>Adicione instruções para a fila de execução sequencial.</p></div></div>
-          <form id="task-queue-form" style="display:flex;gap:10px;">
-            <input id="task-queue-input" class="input" style="flex:1;" placeholder="Ex: Implemente testes unitários para o módulo auth, depois revise os tipos TypeScript...">
-            <select id="task-agent-select" class="select" style="width:160px;">
-              <option value="auto">🤖 Auto (Orquestrador)</option>
-              <option value="coder">💻 Programador</option>
-              <option value="researcher">🔍 Pesquisador</option>
-              <option value="reviewer">🛡 Revisor</option>
-              <option value="tester">🧪 Testador</option>
-              <option value="architect">🏛 Arquiteto</option>
-            </select>
-            <button class="button primary" type="submit">+ Adicionar</button>
-          </form>
-        </div>
-        <div class="panel">
-          <div class="panel-heading">
-            <div><h3>Fila de Execução</h3><p id="task-queue-count">0 tarefa(s) na fila</p></div>
-          </div>
-          <div id="task-queue-list" style="display:flex;flex-direction:column;gap:8px;">
-            <div class="empty-inline">Nenhuma tarefa na fila. Adicione instruções acima.</div>
-          </div>
+        </section>
+        <div class="execution-grid">
+          <section class="panel execution-timeline">
+            <div class="panel-heading"><div><h3>Timeline de atividade</h3><p>Chamadas de ferramentas, etapas de agentes, tokens e erros.</p></div></div>
+            <div id="monitor-stats" class="monitor-stats"></div>
+            <div id="monitor-feed" class="monitor-feed"><div class="empty-inline">Aguardando eventos do agente…</div></div>
+          </section>
+          <section class="panel execution-terminal">
+            <div class="panel-heading"><div><h3>Terminal do agente</h3><p>Saída dos comandos executados no workspace ativo.</p></div><button id="clear-workspace-log" class="button secondary small" type="button">Limpar saída</button></div>
+            <div id="agent-terminal-output">$ Aguardando comandos do agente...</div>
+          </section>
         </div>
       </section>
 
