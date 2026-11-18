@@ -2174,3 +2174,25 @@ textarea { resize:vertical; }
   .project-inline-form label:nth-child(3) { grid-column:auto; }
   .plugin-connection-row { grid-template-columns:minmax(0,1fr); align-items:start; }
 }
+
+
+.provider-guide {
+  margin-top:13px; background:#1d1d1d; border:1px solid #393939; border-radius:6px;
+}
+.provider-guide > summary {
+  padding:10px 12px; color:#c7c7c7; font-size:10px; font-weight:600; cursor:pointer;
+  list-style:none;
+}
+.provider-guide > summary::-webkit-details-marker { display:none; }
+.provider-guide > summary::before { content:"›"; margin-right:8px; color:#999; font-size:14px; }
+.provider-guide[open] > summary { border-bottom:1px solid #373737; }
+.provider-guide[open] > summary::before { content:"⌄"; }
+.provider-guide-body { padding:12px 14px; color:#aaa; font-size:9px; line-height:1.7; }
+.provider-guide-body ol { display:grid; gap:7px; margin:0 0 10px; padding-left:19px; }
+.provider-guide-body li { padding-left:2px; }
+.provider-guide-body code {
+  padding:2px 4px; color:#d2d2d2; background:#303030; border:1px solid #444;
+  border-radius:3px; font-size:8px;
+}
+.provider-guide-body p { margin:9px 0; color:#8b8b8b; }
+.provider-guide-body a { color:#c7c7c7; text-decoration:underline; text-underline-offset:3px; }
