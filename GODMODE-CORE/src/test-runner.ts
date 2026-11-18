@@ -23,6 +23,39 @@ export interface TestExecutionResult {
   diagnostics: string[];
 }
 
+function parseCommandLine(command: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (const char of command.trim()) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      continue;
+    }
+    if (/\s/.test(char) && !quote) {
+      if (current) { parts.push(current); current = ''; }
+      continue;
+    }
+    current += char;
+  }
+
+  if (escaped) current += '\\';
+  if (quote) throw new Error('Comando inválido: aspas não fechadas.');
+  if (current) parts.push(current);
+  return parts;
+}
+
 export class TestRunner {
   private getConfigPath(projectId: string): string {
     return path.join(GODMODE_HOME, 'test-configs', `${projectId}.json`);
@@ -68,9 +101,16 @@ export class TestRunner {
     const timeoutMs = (config.timeoutSeconds ?? 60) * 1000;
 
     // Executa via sandbox com limites de segurança e tempo
-    const parts = commandStr.trim().split(/\s+/);
-    const cmd = parts[0];
+    const parts = parseCommandLine(commandStr);
+    if (!parts.length) throw new Error(`Comando para suíte "${suite}" inválido.`);
+    let cmd = parts[0];
     const args = parts.slice(1);
+
+    // No Windows, npm/npx e gerenciadores comuns são scripts .cmd.
+    // O ProcessSandbox habilita shell somente para extensões .cmd/.bat.
+    if (process.platform === 'win32' && /^(npm|npx|pnpm|yarn)$/i.test(cmd)) {
+      cmd += '.cmd';
+    }
 
     const execResult = await processSandbox.execute(cmd, args, {
       cwd: project.path,
