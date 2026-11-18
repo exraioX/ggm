@@ -39,3 +39,35 @@ Abra `http://127.0.0.1:8765`, configure um provedor local e, na aba Integraçõe
 ## Limites conhecidos
 
 O núcleo é independente do G0DM0D3, mas não declara compatibilidade com qualquer plugin proprietário do Claude. O plugin precisa implementar MCP ou exigir um adaptador. A configuração `mcpServers` é importada por conteúdo JSON; o Core não altera o arquivo privado do Claude Desktop. OAuth interativo, sampling, elicitation, roots, subscrições de recursos, tarefas MCP e sandbox forte de processos não estão implementados nesta entrega. Headroom ainda não está acoplado como compressor automático do pipeline de contexto; Goldie não está instalado. A memória integrada é JSON persistente, não vetorial.
+
+## Auditoria de integração — 18 de novembro de 2026
+
+A revisão de produto e código consolidou fluxos que antes estavam separados:
+
+- Workflow imediato e fila passaram a usar o mesmo executor; a escolha de especialista é respeitada e os resultados deixam de ser apagados ao concluir.
+- Tarefas podem ser reenfileiradas; a limpeza por projeto preserva tarefas globais e tarefas de outros projetos.
+- O executor de testes existente passou a ser acessível pela interface para test, lint e build/typecheck, com configuração por projeto.
+- Monitor e terminal passaram a compartilhar o mesmo stream de eventos; saídas de ferramentas são limitadas a 6.000 caracteres por evento.
+- O monitor passou a limpar o buffer compartilhado e sincronizar a ação entre clientes SSE conectados.
+- Resources e prompts MCP passaram a ter listas e ações de consulta na interface.
+- O seletor cosmético de autonomia foi removido: ele não alterava permissões do backend. As aprovações continuam sendo aplicadas pelo núcleo.
+- A seleção de especialista explícita executa um único perfil; o modo automático gera o plano sequencial com especialistas.
+- O parser do TestRunner passou a preservar caminhos Windows e argumentos entre aspas; comandos npm/npx/pnpm/yarn usam os shims .cmd no Windows.
+
+### Regressões adicionadas
+
+- `test/ui-contract.test.ts` — destinos de navegação, IDs duplicados, consolidação das telas, contratos do centro de missões, capacidades MCP, terminal e presença de estilos.
+- `test/phase4.test.ts` — parser de comandos com caminhos Windows/aspas e seleção explícita de especialista.
+- `test/phase5-v2.test.ts` — retry limpa resultado/erro anterior e clear de projeto não remove tarefas globais ou de outros projetos.
+- `.github/workflows/validate-core.yml` — CI para `npm ci`, typecheck e suite de testes.
+
+### Resultado de validação desta auditoria
+
+- [x] JavaScript da interface analisado sintaticamente após as mudanças.
+- [x] Estrutura HTML revisada: IDs duplicados ausentes e todos os destinos `data-view` com uma tela correspondente.
+- [x] Revisados os contratos de UI/API para missão, fila, TestRunner e resources/prompts MCP.
+- [x] Conferida a presença dos estilos das novas áreas.
+- [ ] `npm ci`, `npm run typecheck` e `npm test` não foram executados neste ambiente. O conector do GitHub não retornou nenhuma execução de Actions para a branch nesta auditoria; portanto, não há resultado remoto para marcar como aprovado.
+- [ ] Inicialização no Windows, conexão real com modelo, execução de comandos no projeto do usuário e consultas a servidores MCP externos ainda dependem de teste no computador de destino.
+
+Não interpretar a presença do workflow de CI ou dos testes adicionados como prova de que a suíte passou. O status só deve ser marcado como aprovado após uma execução real do GitHub Actions ou uma execução local completa.
