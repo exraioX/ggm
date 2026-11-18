@@ -28,6 +28,11 @@ let memories = [];
 let specialists = [];
 let claudePlugins = [];
 let mcpCatalog = [];
+let pluginStatusMap = new Map();
+let pluginTab = 'discover';
+let pluginSearchText = '';
+let selectedPluginKey = '';
+let pluginLoadError = '';
 let activeProviderId = '';
 let activeModelId = '';
 let providerModelCatalogs = new Map();
@@ -116,7 +121,7 @@ function setView(view) {
   }
   if (view === 'projects') renderProjects();
   if (view === 'providers') renderProviders();
-  if (view === 'mcp') { loadPluginManager(); }
+  if (view === 'mcp') { void loadPluginManager(); }
   if (view === 'memory') renderMemories();
   if (view === 'settings') refreshSystem();
   if (view === 'workspace') {
@@ -1074,44 +1079,27 @@ async function loadSpecialists() {
     const res = await api('/api/agents/specialists');
     specialists = res.specialists || [];
     const roleIcons = {
-      orchestrator: '👑',
-      coder: '💻',
-      researcher: '🔍',
-      reviewer: '🛡',
-      tester: '🧪',
-      architect: '🏛',
-      reverse_engineer: '⚙'
+      orchestrator:'◎', coder:'⌘', researcher:'⌕', reviewer:'✓',
+      tester:'▤', architect:'⌂', reverse_engineer:'⌁'
     };
-
     grid.innerHTML = specialists.map(agent => {
-      const icon = roleIcons[agent.role] || '🤖';
-      return `
-        <article class="mcp-card specialist-card" style="border-left: 3px solid var(--accent);">
-          <div class="mcp-card-head">
-            <div>
-              <div class="mcp-name" style="display:flex;align-items:center;gap:6px;">
-                <span>${icon}</span>
-                <span>${escapeHtml(agent.name)}</span>
-              </div>
-              <div class="mcp-subline">Função: <code>${escapeHtml(agent.role)}</code></div>
-            </div>
-            <span class="status-pill">Ativo</span>
-          </div>
-          <div class="mcp-description" style="margin-top:8px;">${escapeHtml(agent.description)}</div>
-          <div style="margin-top:10px;">
-            <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:4px;">Ferramentas recomendadas (não executadas pelo perfil):</div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;">
-              ${(agent.recommendedTools || []).map(t => `<span class="badge" style="font-size:10px;background:rgba(0,229,255,0.08);color:var(--accent);border:1px solid rgba(0,229,255,0.2);">${escapeHtml(t)}</span>`).join('')}
-            </div>
-          </div>
-        </article>
-      `;
-    }).join('');
+      const tools = (agent.recommendedTools || []).map(tool =>
+        '<span class="specialist-tool-chip">' + escapeHtml(tool) + '</span>'
+      ).join('');
+      return '<article class="specialist-row">' +
+        '<span class="specialist-row-icon">' + (roleIcons[agent.role] || '◇') + '</span>' +
+        '<div class="specialist-row-main">' +
+          '<strong>' + escapeHtml(agent.name) + ' <code>' + escapeHtml(agent.role) + '</code></strong>' +
+          '<small>' + escapeHtml(agent.description || '') + '</small>' +
+          (tools ? '<div class="specialist-row-tools">' + tools + '</div>' : '') +
+        '</div>' +
+        '<span class="status-pill status-connected">Disponível</span>' +
+      '</article>';
+    }).join('') || '<div class="empty-inline">Nenhum especialista registrado.</div>';
   } catch (error) {
-    grid.innerHTML = `<div class="empty-inline error">Erro ao carregar especialistas: ${escapeHtml(error.message)}</div>`;
+    grid.innerHTML = '<div class="empty-inline error">Erro ao carregar especialistas: ' + escapeHtml(error.message) + '</div>';
   }
 }
-
 function renderWorkflowResult(result) {
   const progress = $('#workflow-progress');
   const stepsHost = $('#workflow-steps-list');
@@ -1293,122 +1281,244 @@ async function runProjectSuite(suite, button) {
 // Claude Code Plugins & MCP Marketplace
 // ============================================================
 
-async function loadClaudePlugins() {
-  const host = $('#claude-plugins-list');
-  if (!host) return;
+async function loadPluginManager() {
+  pluginLoadError = '';
   try {
-    const res = await api('/api/claude/plugins');
-    claudePlugins = res.plugins || [];
-    if (!claudePlugins.length) {
-      host.innerHTML = '<div class="empty-inline">Nenhum plugin instalado em ~/.claude/ ou AppData. Clique em "Sincronizar Claude Code / Desktop" para verificar.</div>';
+    const [pluginRes, catalogRes, statusRes, serverRes, toolRes, resourceRes, promptRes] = await Promise.all([
+      api('/api/claude/plugins'),
+      api('/api/mcp/marketplace/catalog'),
+      api('/api/mcp/marketplace/status'),
+      api('/api/mcp/servers'),
+      api('/api/mcp/tools'),
+      api('/api/mcp/resources'),
+      api('/api/mcp/prompts')
+    ]);
+    claudePlugins = pluginRes.plugins || [];
+    mcpCatalog = catalogRes.catalog || [];
+    pluginStatusMap = new Map((statusRes.status || []).map(item => [item.id, item]));
+    servers = serverRes.servers || [];
+    tools = toolRes.tools || [];
+    resources = resourceRes.resources || [];
+    prompts = promptRes.prompts || [];
+    renderPluginManager();
+    renderServers();
+    renderTools();
+    renderMcpCapabilities();
+  } catch (error) {
+    pluginLoadError = error.message || String(error);
+    renderPluginManager();
+    toast('Não foi possível carregar a área de plugins: ' + pluginLoadError, true);
+  }
+}
+
+function getPluginEntries() {
+  const query = pluginSearchText.trim().toLowerCase();
+  let entries = [];
+
+  if (pluginTab === 'discover') {
+    entries = mcpCatalog.map(item => {
+      const status = pluginStatusMap.get(item.id) || { installed:false, enabled:false, connected:false };
+      return {
+        key:'catalog:' + item.id, type:'catalog', id:item.id,
+        name:item.name, description:item.description, category:item.category,
+        package:item.command + ' ' + (item.args || []).join(' '),
+        author:item.author, permissions:item.permissions || [], risk:item.risk,
+        installed:status.installed, enabled:status.enabled, connected:status.connected
+      };
+    });
+  } else if (pluginTab === 'installed') {
+    entries = servers.map(server => ({
+      key:'server:' + server.name, type:'server', id:server.name,
+      name:server.name, description:server.description || 'Servidor MCP configurado',
+      category:'Servidor MCP', connected:Boolean(server.connected),
+      enabled:server.enabled !== false, error:server.error || '',
+      toolsCount:Number(server.tools || 0), command:server.command, args:server.args || [],
+      url:server.url, transport:server.transport
+    }));
+    const serverNames = new Set(servers.map(server => server.name));
+    claudePlugins.filter(plugin => plugin.source !== 'claude-desktop' || !serverNames.has(plugin.name)).forEach(plugin => {
+      entries.push({
+        key:'native:' + plugin.source + ':' + plugin.name, type:'native', id:plugin.name,
+        name:plugin.name, description:plugin.description || 'Plugin detectado na configuração do Claude',
+        category:plugin.source === 'claude-code' ? 'Claude Code' : 'Claude Desktop',
+        source:plugin.source, enabled:plugin.enabled !== false, toolsCount:(plugin.tools || []).length
+      });
+    });
+  } else if (pluginTab === 'marketplaces') {
+    const categories = [...new Set(mcpCatalog.map(item => item.category))];
+    entries = [{
+      key:'marketplace:curated', type:'marketplace', id:'curated',
+      name:'GODMODE MCP Curated', description:'Catálogo integrado de servidores MCP mantido junto ao GODMODE CORE.',
+      category:'Catálogo integrado', itemCount:mcpCatalog.length, categories
+    }];
+  } else if (pluginTab === 'errors') {
+    entries = servers.filter(server => Boolean(server.error)).map(server => ({
+      key:'error:' + server.name, type:'error', id:server.name,
+      name:server.name, description:server.description || 'Falha em servidor MCP',
+      error:server.error, category:server.transport || (server.command ? 'stdio' : 'HTTP'),
+      connected:Boolean(server.connected), command:server.command, url:server.url
+    }));
+  }
+
+  if (query) {
+    entries = entries.filter(item =>
+      [item.name,item.description,item.category,item.package,item.author,item.id,item.error]
+        .filter(Boolean).join(' ').toLowerCase().includes(query)
+    );
+  }
+  return entries;
+}
+
+function renderPluginManager() {
+  const list = $('#plugin-entry-list');
+  const title = $('#plugin-list-title');
+  const count = $('#plugin-list-count');
+  const errorCount = $('#plugin-error-count');
+  if (!list) return;
+
+  const errors = servers.filter(server => Boolean(server.error)).length;
+  if (errorCount) errorCount.textContent = String(errors);
+  const labels = {
+    discover:'Catálogo disponível',
+    installed:'Extensões instaladas',
+    marketplaces:'Fontes de plugins',
+    errors:'Falhas de conexão'
+  };
+  if (title) title.textContent = labels[pluginTab] || 'Plugins';
+  const entries = getPluginEntries();
+  if (count) count.textContent = String(entries.length);
+
+  $$('[data-plugin-tab]').forEach(button => {
+    const active = button.dataset.pluginTab === pluginTab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  if (!entries.some(entry => entry.key === selectedPluginKey)) {
+    selectedPluginKey = entries[0]?.key || '';
+  }
+
+  list.innerHTML = entries.map(entry => {
+    let status = '';
+    if (entry.type === 'catalog') status = entry.installed ? (entry.enabled ? 'Instalado' : 'Desativado') : 'Disponível';
+    else if (entry.type === 'server') status = entry.error ? 'Erro' : entry.connected ? 'Conectado' : entry.enabled ? 'Desconectado' : 'Desativado';
+    else if (entry.type === 'native') status = entry.enabled ? 'Detectado' : 'Inativo';
+    else if (entry.type === 'error') status = 'Erro';
+    else status = entry.itemCount + ' integrações';
+
+    const icon = entry.type === 'catalog' ? '◇' : entry.type === 'server' ? '⌘' :
+      entry.type === 'native' ? '⚡' : entry.type === 'error' ? '!' : '▦';
+    return '<button type="button" class="plugin-entry' + (entry.key === selectedPluginKey ? ' active' : '') +
+      '" data-plugin-select="' + escapeHtml(entry.key) + '">' +
+      '<span class="plugin-entry-icon">' + icon + '</span>' +
+      '<span class="plugin-entry-copy"><strong>' + escapeHtml(entry.name) + '</strong><small>' +
+      escapeHtml(entry.category || '') + '</small></span>' +
+      '<span class="plugin-entry-status">' + escapeHtml(status) + '</span>' +
+    '</button>';
+  }).join('') || (pluginLoadError
+    ? '<div class="empty-inline error">' + escapeHtml(pluginLoadError) + '</div>'
+    : '<div class="empty-inline">Nenhum item nesta categoria.</div>');
+
+  renderPluginDetail(entries.find(entry => entry.key === selectedPluginKey) || null);
+}
+
+function renderPluginDetail(entry) {
+  const host = $('#plugin-detail-panel');
+  if (!host) return;
+  if (!entry) {
+    host.innerHTML = '<div class="plugin-detail-empty"><div class="plugin-detail-mark">◇</div><h3>Selecione uma integração</h3><p>Escolha um item à esquerda para ver detalhes e ações disponíveis.</p></div>';
+    return;
+  }
+
+  const tag = (label, value) => '<span class="plugin-detail-tag"><small>' + escapeHtml(label) + '</small><strong>' + escapeHtml(value) + '</strong></span>';
+  let meta = '';
+  let actions = '';
+  let capabilities = '';
+  let warning = '';
+
+  if (entry.type === 'catalog') {
+    meta = tag('Categoria',entry.category) + tag('Autor',entry.author || 'Comunidade') +
+      tag('Risco declarado',entry.risk || 'Não classificado') + tag('Pacote',entry.package || 'MCP');
+    capabilities = '<div class="plugin-detail-section"><h4>Permissões declaradas</h4><div class="plugin-permissions">' +
+      (entry.permissions || []).map(permission => '<code>' + escapeHtml(permission) + '</code>').join('') +
+      '</div></div><div class="plugin-detail-section"><h4>Como funciona</h4><p>Este item registra um servidor MCP no GODMODE. A conexão só inicia quando você escolher Conectar, após revisar o comando e os argumentos.</p></div>';
+    if (entry.installed) {
+      actions = '<button class="button secondary" data-plugin-toggle="' + escapeHtml(entry.id) + '" data-enabled="' + String(entry.enabled) + '">' +
+        (entry.enabled ? 'Desativar' : 'Ativar') + '</button><span class="plugin-inline-state">' + (entry.connected ? 'Conectado' : 'Instalado; conexão sob demanda') + '</span>';
+    } else {
+      actions = '<button class="button primary" data-plugin-install="' + escapeHtml(entry.id) + '">＋ Instalar integração</button>';
+    }
+  } else if (entry.type === 'server' || entry.type === 'error') {
+    meta = tag('Tipo',entry.category || 'MCP') + tag('Estado',entry.error ? 'Erro' : entry.connected ? 'Conectado' : entry.enabled ? 'Desconectado' : 'Desativado') +
+      tag('Ferramentas',String(entry.toolsCount || 0));
+    if (entry.url) meta += tag('Endpoint',entry.url);
+    if (entry.command) meta += tag('Comando',entry.command + ' ' + (entry.args || []).join(' '));
+    capabilities = entry.error
+      ? '<div class="plugin-error-box"><strong>Último erro</strong><p>' + escapeHtml(entry.error) + '</p></div>'
+      : '<div class="plugin-detail-section"><h4>Conexão</h4><p>Este servidor disponibiliza suas ferramentas MCP quando estiver conectado. Ferramentas podem solicitar aprovação conforme a política do núcleo.</p></div>';
+    if (entry.connected) actions += '<button class="button secondary" data-plugin-disconnect="' + escapeHtml(entry.id) + '">Desconectar</button>';
+    else if (entry.enabled) actions += '<button class="button primary" data-plugin-connect="' + escapeHtml(entry.id) + '">Conectar</button>';
+    if (!entry.connected) actions += '<button class="button subtle-danger" data-plugin-remove="' + escapeHtml(entry.id) + '">Remover</button>';
+  } else if (entry.type === 'native') {
+    meta = tag('Origem',entry.source === 'claude-code' ? 'Claude Code' : 'Claude Desktop') +
+      tag('Estado',entry.enabled ? 'Detectado' : 'Inativo') + tag('Ferramentas conhecidas',String(entry.toolsCount || 0));
+    capabilities = '<div class="plugin-detail-section"><h4>Plugin nativo detectado</h4><p>O GODMODE identificou esta entrada na configuração do Claude. A administração e instalação de plugins nativos do Claude Code ainda não é suportada por esta integração; servidores MCP compatíveis podem ser importados e gerenciados separadamente.</p></div>';
+  } else if (entry.type === 'marketplace') {
+    meta = tag('Origem','Integrado ao GODMODE') + tag('Itens',String(entry.itemCount || 0)) +
+      tag('Categorias',(entry.categories || []).join(', ') || '—');
+    capabilities = '<div class="plugin-detail-section"><h4>Catálogo MCP integrado</h4><p>Esta versão oferece um catálogo curado embutido. Ainda não há cadastro de marketplaces Git remotos nem sincronização de fontes nativas do Claude Code.</p></div>';
+    actions = '<button class="button primary" data-plugin-show-discover>Ver integrações</button>';
+  }
+
+  host.innerHTML = '<div class="plugin-detail-header"><div class="plugin-detail-icon">' +
+    (entry.type === 'native' ? '⚡' : entry.type === 'marketplace' ? '▦' : '◇') + '</div><div class="plugin-detail-heading">' +
+    '<div class="plugin-detail-eyebrow">' + escapeHtml(entry.category || 'Integração') + '</div><h3>' + escapeHtml(entry.name) +
+    '</h3><p>' + escapeHtml(entry.description || '') + '</p></div></div>' +
+    '<div class="plugin-detail-tags">' + meta + '</div>' +
+    capabilities +
+    (warning ? '<div class="plugin-detail-warning">' + warning + '</div>' : '') +
+    (actions ? '<div class="plugin-detail-actions">' + actions + '</div>' : '');
+}
+
+async function performPluginAction(action, id, enabled) {
+  try {
+    if (action === 'install') {
+      await api('/api/mcp/marketplace/install/' + encodeURIComponent(id), { method:'POST', body:'{}' });
+      toast('Integração ' + id + ' instalada. Conecte-a depois de revisar o comando.');
+      pluginTab = 'installed';
+      selectedPluginKey = 'server:' + id;
+    } else if (action === 'toggle') {
+      await api('/api/mcp/marketplace/toggle/' + encodeURIComponent(id), {
+        method:'POST', body:JSON.stringify({ enabled:!enabled })
+      });
+      toast('Estado de ' + id + ' atualizado.');
+    } else if (action === 'connect') {
+      await connectMcp(id);
+      return;
+    } else if (action === 'disconnect') {
+      await disconnectMcp(id);
+      return;
+    } else if (action === 'remove') {
+      await removeMcp(id);
       return;
     }
-    host.innerHTML = claudePlugins.map(p => `
-      <div class="mcp-card">
-        <div class="mcp-card-head">
-          <div>
-            <div class="mcp-name">⚡ ${escapeHtml(p.name)}</div>
-            <div class="mcp-subline">Origem: ${escapeHtml(p.source)} · ${p.toolsCount} ferramenta(s)</div>
-          </div>
-          <span class="status-pill ${p.enabled ? '' : 'off'}">${p.enabled ? 'Ativo' : 'Inativo'}</span>
-        </div>
-        <div class="mcp-description" style="margin-top:8px;">${escapeHtml(p.description || 'Plugin importado do Claude Code')}</div>
-      </div>
-    `).join('');
+    await loadPluginManager();
   } catch (error) {
-    host.innerHTML = `<div class="empty-inline error">Erro ao carregar plugins: ${escapeHtml(error.message)}</div>`;
+    toast('Não foi possível atualizar a integração: ' + error.message, true);
   }
 }
 
 async function syncClaudePlugins() {
   const btn = $('#import-claude-btn');
-  btn.disabled = true;
-  btn.textContent = 'Sincronizando…';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando…'; }
   try {
-    const res = await api('/api/claude/plugins/import', { method: 'POST', body: '{}' });
-    toast(`Sincronização concluída: ${res.imported} servidores MCP importados do Claude.`);
-    await Promise.all([loadClaudePlugins(), loadMcp()]);
+    const result = await api('/api/claude/plugins/import', { method:'POST', body:'{}' });
+    toast('Sincronização concluída: ' + result.imported + ' servidor(es) MCP importado(s).');
+    await loadPluginManager();
   } catch (error) {
-    toast(`Erro ao sincronizar Claude: ${error.message}`, true);
+    toast('Erro ao sincronizar Claude: ' + error.message, true);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '⚡ Sincronizar Claude Code / Desktop';
-  }
-}
-
-async function loadMcpMarketplace() {
-  const host = $('#mcp-marketplace-list');
-  if (!host) return;
-  try {
-    const [catalogRes, statusRes] = await Promise.all([
-      api('/api/mcp/marketplace/catalog'),
-      api('/api/mcp/marketplace/status')
-    ]);
-    mcpCatalog = catalogRes.catalog || [];
-    const statusMap = statusRes.status || {};
-
-    host.innerHTML = mcpCatalog.map(item => {
-      const st = statusMap[item.id] || { installed: false, enabled: false };
-      return `
-        <article class="mcp-card">
-          <div class="mcp-card-head">
-            <div>
-              <div class="mcp-name">${escapeHtml(item.name)}</div>
-              <div class="mcp-subline">${escapeHtml(item.category)} · ${escapeHtml(item.package)}</div>
-            </div>
-            <span class="status-pill ${st.installed ? (st.enabled ? '' : 'off') : 'off'}">
-              ${st.installed ? (st.enabled ? 'Instalado' : 'Desativado') : 'Disponível'}
-            </span>
-          </div>
-          <div class="mcp-description" style="margin-top:8px;">${escapeHtml(item.description)}</div>
-          <div class="card-actions" style="margin-top:12px;">
-            ${!st.installed
-              ? `<button class="button primary small" data-install-mcp="${escapeHtml(item.id)}">＋ Instalar</button>`
-              : `<button class="button secondary small" data-toggle-mcp="${escapeHtml(item.id)}" data-current-enabled="${st.enabled}">
-                  ${st.enabled ? 'Desativar' : 'Ativar'}
-                 </button>`
-            }
-          </div>
-        </article>
-      `;
-    }).join('');
-
-    $$('[data-install-mcp]', host).forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.installMcp;
-        btn.disabled = true;
-        btn.textContent = 'Instalando…';
-        try {
-          await api(`/api/mcp/marketplace/install/${encodeURIComponent(id)}`, { method: 'POST', body: '{}' });
-          toast(`Servidor MCP "${id}" instalado com sucesso!`);
-          await Promise.all([loadMcpMarketplace(), loadMcp()]);
-        } catch (err) {
-          toast(`Erro ao instalar: ${err.message}`, true);
-          btn.disabled = false;
-          btn.textContent = '＋ Instalar';
-        }
-      });
-    });
-
-    $$('[data-toggle-mcp]', host).forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.toggleMcp;
-        const currentEnabled = btn.dataset.currentEnabled === 'true';
-        btn.disabled = true;
-        try {
-          await api(`/api/mcp/marketplace/toggle/${encodeURIComponent(id)}`, {
-            method: 'POST',
-            body: JSON.stringify({ enabled: !currentEnabled })
-          });
-          toast(`Servidor MCP "${id}" ${!currentEnabled ? 'ativado' : 'desativado'}.`);
-          await Promise.all([loadMcpMarketplace(), loadMcp()]);
-        } catch (err) {
-          toast(`Erro ao alterar status: ${err.message}`, true);
-        }
-      });
-    });
-  } catch (error) {
-    host.innerHTML = `<div class="empty-inline error">Erro ao carregar catálogo: ${escapeHtml(error.message)}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Sincronizar Claude'; }
   }
 }
 
@@ -1428,6 +1538,7 @@ async function loadMcp() {
     renderServers();
     renderTools();
     renderMcpCapabilities();
+    renderPluginManager();
   } catch (error) { toast(`Falha ao consultar MCP: ${error.message}`, true); }
 }
 
@@ -1635,7 +1746,7 @@ async function selectProject(id) {
     toast(`Projeto ativo alterado para: ${projects.find(p => p.id === activeProjectId)?.name || id}`);
     toast('🔍 Indexando símbolos do projeto em background…');
     api('/api/projects/' + encodeURIComponent(id) + '/index', { method: 'POST', body: '{}' })
-      .then(r => toast(`📊 Índice atualizado: ${r.symbolCount || 0} símbolo(s) encontrado(s).`))
+      .then(r => toast(`📊 Índice atualizado: ${r.totalSymbols || 0} símbolo(s) encontrado(s).`))
       .catch(() => {});
   } catch (error) {
     renderProjectSelector();
@@ -1695,36 +1806,32 @@ function renderProjects() {
   const host = $('#project-list');
   if (!host) return;
   const countEl = $('#projects-count');
-  if (countEl) countEl.textContent = `${projects.length} projeto(s) cadastrado(s)`;
+  if (countEl) countEl.textContent = projects.length + ' workspace(s)';
 
-  host.innerHTML = projects.map(p => {
-    const isActive = p.id === activeProjectId;
-    return `
-      <article class="mcp-card" style="border-left: 3px solid ${isActive ? 'var(--accent)' : 'var(--border)'}">
-        <div class="mcp-card-head">
-          <div>
-            <div class="mcp-name">${escapeHtml(p.name)}</div>
-            <div class="mcp-subline">${escapeHtml(p.path)}</div>
-          </div>
-          ${isActive ? '<span class="status-pill">ATIVO</span>' : ''}
-        </div>
-        <div class="mcp-description" style="margin-top:8px;">${escapeHtml(p.description || 'Sem descrição.')}</div>
-        <div class="card-actions" style="margin-top: 10px;">
-          ${!isActive ? `<button class="button primary small" data-activate-project="${escapeHtml(p.id)}">Ativar</button>` : ''}
-          ${projects.length > 1 ? `<button class="button secondary small" data-delete-project="${escapeHtml(p.id)}">Remover</button>` : ''}
-        </div>
-      </article>
-    `;
-  }).join('') || '<div class="empty-inline">Nenhum projeto cadastrado.</div>';
+  host.innerHTML = projects.map(project => {
+    const active = project.id === activeProjectId;
+    const updated = project.lastUsedAt ? new Date(project.lastUsedAt).toLocaleDateString('pt-BR') : '';
+    return '<article class="project-row' + (active ? ' active' : '') + '">' +
+      '<span class="project-row-icon">' + (active ? '◉' : '▰') + '</span>' +
+      '<div class="project-row-copy">' +
+        '<strong>' + escapeHtml(project.name) + (active ? ' <span class="project-active-label">ATIVO</span>' : '') + '</strong>' +
+        '<small>' + escapeHtml(project.path) + '</small>' +
+        '<span>' + escapeHtml(project.description || 'Sem descrição') + (updated ? ' · Último uso ' + updated : '') + '</span>' +
+      '</div>' +
+      '<div class="project-row-actions">' +
+        (active ? '<span class="project-active-check">✓</span>' : '<button type="button" class="button secondary small" data-activate-project="' + escapeHtml(project.id) + '">Abrir</button>') +
+        (projects.length > 1 ? '<button type="button" class="button subtle-danger small" data-delete-project="' + escapeHtml(project.id) + '" title="Remover projeto">×</button>' : '') +
+      '</div>' +
+    '</article>';
+  }).join('') || '<div class="empty-inline">Nenhum projeto cadastrado. Adicione uma pasta para começar.</div>';
 
-  $$('[data-activate-project]', host).forEach(btn => {
-    btn.addEventListener('click', () => selectProject(btn.dataset.activateProject));
+  $$('[data-activate-project]', host).forEach(button => {
+    button.addEventListener('click', () => void selectProject(button.dataset.activateProject));
   });
-  $$('[data-delete-project]', host).forEach(btn => {
-    btn.addEventListener('click', () => deleteProject(btn.dataset.deleteProject));
+  $$('[data-delete-project]', host).forEach(button => {
+    button.addEventListener('click', () => void deleteProject(button.dataset.deleteProject));
   });
 }
-
 // ============================================================
 // Memória Multi-Nível (Global, Projeto, Sessão)
 // ============================================================
@@ -2184,7 +2291,16 @@ $('#sidebar-search-clear')?.addEventListener('click', () => {
 });
 $('#sidebar-add-project')?.addEventListener('click', () => {
   setView('projects');
+  if ($('#project-form-wrap')) $('#project-form-wrap').hidden = false;
   window.setTimeout(() => $('#proj-name')?.focus(), 0);
+});
+$('#add-project-button')?.addEventListener('click', () => {
+  const wrap = $('#project-form-wrap');
+  if (wrap) wrap.hidden = !wrap.hidden;
+  if (wrap && !wrap.hidden) $('#proj-name')?.focus();
+});
+$('#close-project-form')?.addEventListener('click', () => {
+  if ($('#project-form-wrap')) $('#project-form-wrap').hidden = true;
 });
 $('#sidebar-collapse')?.addEventListener('click', () => {
   document.querySelector('.app-shell')?.classList.toggle('sidebar-collapsed');
@@ -2379,6 +2495,38 @@ $('#run-task-queue')?.addEventListener('click', runTaskQueue);
 $('#clear-task-queue')?.addEventListener('click', clearTaskQueue);
 $('#test-config-form')?.addEventListener('submit', saveTestRunnerConfig);
 $$('[data-run-suite]').forEach(button => button.addEventListener('click', () => runProjectSuite(button.dataset.runSuite, button)));
+$('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
+  pluginTab = button.dataset.pluginTab || 'discover';
+  selectedPluginKey = '';
+  renderPluginManager();
+}));
+$('#plugin-search')?.addEventListener('input', event => {
+  pluginSearchText = event.target.value || '';
+  selectedPluginKey = '';
+  renderPluginManager();
+});
+$('#plugin-refresh')?.addEventListener('click', () => void loadPluginManager());
+$('#plugin-entry-list')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-plugin-select]');
+  if (!button) return;
+  selectedPluginKey = button.dataset.pluginSelect;
+  renderPluginManager();
+});
+$('#plugin-detail-panel')?.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  if (button.hasAttribute('data-plugin-show-discover')) {
+    pluginTab = 'discover';
+    selectedPluginKey = '';
+    renderPluginManager();
+    return;
+  }
+  if (button.hasAttribute('data-plugin-install')) void performPluginAction('install', button.dataset.pluginInstall);
+  else if (button.hasAttribute('data-plugin-toggle')) void performPluginAction('toggle', button.dataset.pluginToggle, button.dataset.enabled === 'true');
+  else if (button.hasAttribute('data-plugin-connect')) void performPluginAction('connect', button.dataset.pluginConnect);
+  else if (button.hasAttribute('data-plugin-disconnect')) void performPluginAction('disconnect', button.dataset.pluginDisconnect);
+  else if (button.hasAttribute('data-plugin-remove')) void performPluginAction('remove', button.dataset.pluginRemove);
+});
 $('#mcp-resources-list')?.addEventListener('click', event => {
   const button = event.target.closest('[data-read-resource]');
   if (button) void inspectMcpResource(button.dataset.server, button.dataset.uri);
