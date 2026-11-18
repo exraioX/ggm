@@ -194,3 +194,38 @@ As permissões de segurança continuam no backend. O seletor visual de “autono
 ### Validação contínua
 
 O workflow do GitHub Actions em `.github/workflows/validate-core.yml` instala dependências com `npm ci`, executa `npm run typecheck` e `npm test` no diretório `GODMODE-CORE` para pushes e pull requests em `claude` e `main`.
+
+## Seleção de modelos e Ollama
+
+No Chat, escolha o provedor e use o campo **Modelo**:
+
+- Digite parte do nome, por exemplo `qwen`, para filtrar as sugestões do navegador; selecione o identificador completo na lista.
+- Também é permitido digitar o identificador inteiro manualmente.
+- A seleção fica guardada por provedor no armazenamento local do navegador e é enviada em cada chamada, inclusive nos workflows e na fila de missões.
+- Para Ollama, o Core consulta primeiro o catálogo OpenAI-compatible `/v1/models`. Se estiver indisponível ou vazio, e o provedor for reconhecido como Ollama em loopback, consulta a API nativa `/api/tags`.
+- Em **Modelos e provedores**, salve o endpoint Ollama, normalmente `http://127.0.0.1:11434/v1`. Você pode salvar sem modelo padrão e escolher um no Chat depois.
+
+A lista é gerada a partir dos modelos realmente retornados pelo endpoint. Um texto digitado manualmente não é validado antes do envio; use o identificador exato exibido pelo Ollama.
+
+## OmniRoute como gateway de modelos
+
+O OmniRoute é opcional e continua sendo um processo independente. O GODMODE conecta a ele pelo protocolo OpenAI-compatible:
+
+1. Instale o OmniRoute com `npm install -g omniroute` e inicie com `omniroute`.
+2. Abra o painel do OmniRoute em `http://127.0.0.1:20128`.
+3. No painel, conecte os provedores de IA que serão usados e crie uma API key em **Endpoints**.
+4. No GODMODE, abra **Modelos e provedores → Conectar OmniRoute**, confira o endpoint `http://127.0.0.1:20128/v1`, informe a chave do OmniRoute e salve.
+5. No Chat, selecione o provedor OmniRoute e use `auto`, `auto/coding` ou um identificador de modelo/provedor disponibilizado pelo gateway.
+
+O OmniRoute precisa estar em execução para receber as requisições. A chave inserida pela interface é mantida em memória no backend e não é gravada no arquivo de provedores; após reiniciar o GODMODE, insira-a novamente, a menos que configure uma credencial pelo ambiente. Consulte a [documentação oficial do OmniRoute](https://github.com/cheaper-inference/omniroute) para conferir instalação, provedores conectáveis, chaves e estratégias de fallback.
+
+## Interface de Plugins
+
+A tela **Plugins** usa quatro abas: **Descobrir**, **Instalados**, **Marketplaces** e **Erros**. O painel esquerdo lista e filtra itens; o painel direito mostra detalhes, origem, permissões declaradas e ações.
+
+- **Descobrir** instala servidores MCP do catálogo curado integrado.
+- **Instalados** permite conectar/desconectar/remover servidores MCP e mostra plugins nativos detectados na configuração do Claude.
+- **Marketplaces** apresenta o catálogo embutido desta versão.
+- **Erros** lista servidores com falha de conexão.
+
+O botão **Sincronizar Claude** importa configurações MCP compatíveis encontradas nos caminhos suportados do Claude Desktop. O GODMODE detecta algumas entradas de plugins nativos do Claude Code, mas ainda não implementa instalação, atualização ou gerenciamento completo desses plugins proprietários, nem cadastro de marketplaces remotos do Claude. Use o **Configuração avançada MCP** para importar manualmente um objeto `mcpServers`.
