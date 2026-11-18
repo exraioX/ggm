@@ -268,57 +268,70 @@
       <!-- VIEW 4: PROJETOS -->
       <section id="view-projects" class="view">
         <div class="view-intro">
-          <div><h2>Gerenciador de Projetos</h2><p>Múltiplas pastas e repositórios locais com contexto, memórias e histórico isolados.</p></div>
+          <div><h2>Projetos</h2><p>Workspaces locais organizados em uma lista, com o projeto ativo sempre visível.</p></div>
+          <button id="add-project-button" class="button primary small" type="button">＋ Novo projeto</button>
         </div>
-        <div class="memory-layout">
-          <div class="panel memory-form-panel">
-            <div class="panel-heading"><div><h3>Novo Projeto</h3><p>Cadastre uma pasta local para trabalhar isoladamente.</p></div></div>
-            <form id="project-form" class="stack-form">
-              <label>Nome do Projeto<input id="proj-name" required maxlength="80" placeholder="Ex: Meu App Backend"></label>
-              <label>Caminho da Pasta no Disco<input id="proj-path" required placeholder="Ex: C:\Users\exraio\meu-projeto"></label>
-              <label>Descrição<textarea id="proj-desc" rows="3" maxlength="300" placeholder="Descrição opcional do projeto…"></textarea></label>
-              <button class="button primary" type="submit">Cadastrar Projeto</button>
-            </form>
+        <section id="project-form-wrap" class="panel project-form-wrap" hidden>
+          <div class="panel-heading">
+            <div><h3>Novo projeto</h3><p>Adicione uma pasta local sem mover ou copiar os arquivos.</p></div>
+            <button id="close-project-form" class="button secondary small" type="button">Fechar</button>
           </div>
-          <div class="memory-list-wrap">
-            <div class="section-heading"><div><h3>Projetos Cadastrados</h3><p id="projects-count">Carregando…</p></div></div>
-            <div id="project-list" class="project-list-rows"></div>
-          </div>
-        </div>
+          <form id="project-form" class="project-inline-form">
+            <label>Nome do projeto<input id="proj-name" required maxlength="80" placeholder="Ex.: Meu App Backend"></label>
+            <label>Caminho da pasta<input id="proj-path" required placeholder="Ex.: C:\Projetos\Meu-App"></label>
+            <label>Descrição<textarea id="proj-desc" rows="2" maxlength="300" placeholder="Descrição opcional…"></textarea></label>
+            <button class="button primary" type="submit">Adicionar projeto</button>
+          </form>
+        </section>
+        <section class="project-directory">
+          <div class="section-heading"><div><h3>Seus projetos</h3><p id="projects-count">Carregando…</p></div></div>
+          <div id="project-list" class="project-list-rows"></div>
+        </section>
       </section>
 
       <!-- VIEW 5: PLUGINS & MCP -->
-      <section id="view-mcp" class="view">
-        <div class="view-intro">
-          <div>
-            <h2>Plugins do Claude Code & Servidores MCP</h2>
-            <p>Integração total com Claude Code plugins, Claude Desktop e catálogo curado de servidores MCP.</p>
+      <section id="view-mcp" class="view plugin-manager-view">
+        <div class="view-intro plugin-manager-intro">
+          <div><h2>Plugins</h2><p>Descubra integrações, gerencie servidores instalados e acompanhe problemas de conexão.</p></div>
+          <div class="plugin-toolbar-actions">
+            <button id="import-claude-btn" class="button secondary small" type="button">↻ Sincronizar Claude</button>
+            <button id="plugin-refresh" class="button secondary small" type="button">Atualizar</button>
           </div>
-          <button id="import-claude-btn" class="button primary small">⚡ Sincronizar Claude Code / Desktop</button>
         </div>
 
-        <div class="panel" style="margin-bottom:18px;">
-          <div class="panel-heading">
-            <div>
-              <h3>Plugins Detectados do Claude Code</h3>
-              <p>Ferramentas e extensões descobertas nas configurações do Claude.</p>
+        <nav class="plugin-tabs" aria-label="Navegação de plugins">
+          <button type="button" class="plugin-tab active" data-plugin-tab="discover">Descobrir</button>
+          <button type="button" class="plugin-tab" data-plugin-tab="installed">Instalados</button>
+          <button type="button" class="plugin-tab" data-plugin-tab="marketplaces">Marketplaces</button>
+          <button type="button" class="plugin-tab" data-plugin-tab="errors">Erros <span id="plugin-error-count" class="plugin-tab-count">0</span></button>
+        </nav>
+
+        <div class="plugin-manager-layout">
+          <aside class="plugin-browser">
+            <label class="plugin-search-wrap">
+              <span aria-hidden="true">⌕</span>
+              <input id="plugin-search" type="search" placeholder="Buscar plugins e integrações" autocomplete="off">
+            </label>
+            <div class="plugin-browser-heading"><span id="plugin-list-title">Catálogo disponível</span><span id="plugin-list-count">0</span></div>
+            <div id="plugin-entry-list" class="plugin-entry-list">
+              <div class="empty-inline">Carregando integrações…</div>
             </div>
-          </div>
-          <div id="claude-plugins-list" class="claude-plugins-grid">
-            <div class="empty-inline">Clique em "Sincronizar Claude Code / Desktop" para carregar plugins instalados.</div>
-          </div>
+          </aside>
+          <main id="plugin-detail-panel" class="plugin-detail-panel">
+            <div class="plugin-detail-empty">
+              <div class="plugin-detail-mark">◇</div>
+              <h3>Selecione uma integração</h3>
+              <p>Escolha um item à esquerda para ver permissões, origem, estado e ações disponíveis.</p>
+            </div>
+          </main>
         </div>
 
-        <div class="section-heading">
-          <div><h3>Marketplace de Ferramentas MCP</h3><p>Servidores oficiais e curados para instalação rápida em um clique.</p></div>
-        </div>
-        <div id="mcp-marketplace-list" class="mcp-server-grid" style="margin-bottom:20px;"></div>
-
-        <div class="panel">
-          <div class="panel-heading">
-            <div><h3>Importação Manual MCP (JSON)</h3><p>Cole a configuração com <code>mcpServers</code> usada no Claude Desktop.</p></div>
-          </div>
-          <textarea id="mcp-config" class="code-area" rows="6" placeholder='{
+        <details class="plugin-advanced">
+          <summary>Configuração avançada MCP</summary>
+          <div class="plugin-advanced-body">
+            <section class="panel">
+              <div class="panel-heading"><div><h3>Importar configuração MCP</h3><p>Compatível com o objeto <code>mcpServers</code> do Claude Desktop.</p></div></div>
+              <textarea id="mcp-config" class="code-area" rows="6" placeholder='{
   "mcpServers": {
     "meu-servidor": {
       "command": "npx",
@@ -326,43 +339,37 @@
     }
   }
 }'></textarea>
-          <div class="import-footer">
-            <span>Use <code>${NOME_DA_VARIAVEL}</code> para referenciar variáveis de ambiente com segurança.</span>
-            <button id="import-mcp" class="button primary">Validar e importar</button>
+              <div class="import-footer">
+                <span>Use variáveis de ambiente para credenciais; não cole segredos em configurações compartilhadas.</span>
+                <button id="import-mcp" class="button primary small" type="button">Validar e importar</button>
+              </div>
+              <div id="mcp-import-feedback" class="feedback" aria-live="polite"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading"><div><h3>Servidores MCP conectados</h3><p>Conexões e ferramentas disponíveis para o agente.</p></div><button id="connect-all-mcp" class="button secondary small" type="button">Conectar habilitados</button></div>
+              <div id="mcp-server-list" class="plugin-connection-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading"><div><h3>Ferramentas descobertas</h3><span id="tools-count" class="count-pill">0 ferramentas</span></div></div>
+              <div id="mcp-tools-list" class="tools-list"></div>
+            </section>
+            <div class="capability-grid">
+              <section class="panel capability-panel">
+                <div class="panel-heading"><div><h3>Resources MCP</h3><p>Recursos anunciados pelos servidores.</p></div><span id="resources-count" class="count-pill">0 recursos</span></div>
+                <div id="mcp-resources-list" class="capability-list"></div>
+              </section>
+              <section class="panel capability-panel">
+                <div class="panel-heading"><div><h3>Prompts MCP</h3><p>Templates disponibilizados pelos servidores.</p></div><span id="prompts-count" class="count-pill">0 prompts</span></div>
+                <div id="mcp-prompts-list" class="capability-list"></div>
+              </section>
+            </div>
+            <section class="panel capability-output-panel">
+              <div class="panel-heading"><div><h3>Conteúdo MCP</h3><p>Resultado de uma leitura ou prompt selecionado.</p></div></div>
+              <pre id="mcp-capability-output">Selecione um resource ou prompt para consultar seu conteúdo.</pre>
+            </section>
           </div>
-          <div id="mcp-import-feedback" class="feedback" aria-live="polite"></div>
-        </div>
-
-        <div class="section-heading">
-          <div><h3>Servidores MCP Configurados</h3><p>Servidores prontos para conexão no projeto.</p></div>
-          <button id="connect-all-mcp" class="button secondary small">Conectar habilitados</button>
-        </div>
-        <div id="mcp-server-list" class="mcp-server-grid"></div>
-
-        <div class="panel tools-panel" style="margin-top:18px;">
-          <div class="panel-heading">
-            <div><h3>Ferramentas Descobertas</h3><p>Ferramentas ativas disponíveis para o agente utilizar.</p></div>
-            <span id="tools-count" class="count-pill">0 ferramentas</span>
-          </div>
-          <div id="mcp-tools-list" class="tools-list">
-            <div class="empty-inline">Conecte um servidor MCP para descobrir ferramentas.</div>
-          </div>
-        </div>
-        <div class="capability-grid">
-          <section class="panel capability-panel">
-            <div class="panel-heading"><div><h3>Resources MCP</h3><p>Recursos anunciados por servidores conectados.</p></div><span id="resources-count" class="count-pill">0 recursos</span></div>
-            <div id="mcp-resources-list" class="capability-list"><div class="empty-inline">Conecte um servidor MCP com resources.</div></div>
-          </section>
-          <section class="panel capability-panel">
-            <div class="panel-heading"><div><h3>Prompts MCP</h3><p>Modelos de prompt disponibilizados pelos servidores.</p></div><span id="prompts-count" class="count-pill">0 prompts</span></div>
-            <div id="mcp-prompts-list" class="capability-list"><div class="empty-inline">Conecte um servidor MCP com prompts.</div></div>
-          </section>
-        </div>
-        <section class="panel capability-output-panel">
-          <div class="panel-heading"><div><h3>Visualização de recurso / prompt</h3><p>Conteúdo retornado pelo servidor selecionado.</p></div></div>
-          <pre id="mcp-capability-output">Selecione um recurso ou prompt para consultar seu conteúdo.</pre>
-        </section>
-
+        </details>
+        <p class="plugin-manager-footnote">O catálogo integrado instala servidores compatíveis com MCP. Plugins nativos do Claude Code podem ser detectados/sincronizados quando suportados pelo conector; a instalação e o gerenciamento completo de plugins proprietários do Claude ainda não são implementados pelo núcleo.</p>
       </section>
 
       <!-- VIEW 6: MEMÓRIA MULTI-NÍVEL -->
