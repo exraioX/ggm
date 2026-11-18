@@ -23,34 +23,34 @@ export interface TestExecutionResult {
   diagnostics: string[];
 }
 
-function parseCommandLine(command: string): string[] {
+export function parseCommandLine(command: string): string[] {
   const parts: string[] = [];
   let current = '';
   let quote: '"' | "'" | null = null;
-  let escaped = false;
 
-  for (const char of command.trim()) {
-    if (escaped) {
-      current += char;
-      escaped = false;
+  for (let index = 0; index < command.trim().length; index++) {
+    const char = command.trim()[index];
+    const next = command.trim()[index + 1];
+
+    if (char === '\\' && next !== undefined && (next === '"' || next === "'" || next === '\\' || (!quote && /\s/.test(next)))) {
+      current += next;
+      index++;
       continue;
     }
-    if (char === '\\' && quote !== "'") {
-      escaped = true;
-      continue;
-    }
+
     if ((char === '"' || char === "'") && (!quote || quote === char)) {
       quote = quote ? null : char;
       continue;
     }
+
     if (/\s/.test(char) && !quote) {
       if (current) { parts.push(current); current = ''; }
       continue;
     }
+
     current += char;
   }
 
-  if (escaped) current += '\\';
   if (quote) throw new Error('Comando inválido: aspas não fechadas.');
   if (current) parts.push(current);
   return parts;
