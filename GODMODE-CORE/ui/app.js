@@ -197,6 +197,7 @@ function createConversation() {
   saveConversations();
   renderConversationList();
   renderChat();
+  setView('chat');
   $('#chat-input').focus();
 }
 
@@ -619,7 +620,7 @@ async function sendMessage(event) {
       typing.innerHTML = '<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div><span>🤖 Orquestrador ativado — delegando para especialistas…</span>';
       result = await api('/api/agents/workflow/run', {
         method: 'POST',
-        body: JSON.stringify({ task: text, projectId: activeProjectId })
+        body: JSON.stringify({ task: text, projectId: activeProjectId, providerId: activeProviderId, model: modelToUse })
       });
       // Normalize workflow result to chat-like shape
       if (result.result?.synthesis && !result.answer) {
@@ -1160,7 +1161,8 @@ async function runMultiAgentWorkflow(event) {
         task,
         agentRole: $('#workflow-agent-role')?.value || 'auto',
         projectId: activeProjectId || undefined,
-        providerId: activeProviderId || undefined
+        providerId: activeProviderId || undefined,
+        model: activeModelId || undefined
       })
     });
 
