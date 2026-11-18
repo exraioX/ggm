@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "exemplo-local": {
+      "command": "npx.cmd",
+      "args": ["-y", "nome-do-pacote-mcp"],
+      "env": {
+        "TOKEN": "${MEU_TOKEN}"
+      },
+      "cwd": "C:/Projetos/meu-workspace"
+    },
+    "exemplo-http": {
+      "url": "https://servidor.exemplo.com/mcp",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer ${MCP_ACCESS_TOKEN}"
+      }
+    },
+    "exemplo-sse-legado": {
+      "url": "https://servidor-antigo.exemplo.com/sse",
+      "transport": "sse",
+      "headers": {
+        "Authorization": "Bearer ${MCP_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

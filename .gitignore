@@ -1,0 +1,18 @@
+# Dependências e builds
+**/node_modules/
+**/dist/
+**/.next/
+
+# Segredos e dados locais
+**/.env
+**/.env.local
+**/*.log
+**/*.tmp
+
+# Estado local do núcleo (normalmente fora do repositório)
+.GODMODE/
+.godmode/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
