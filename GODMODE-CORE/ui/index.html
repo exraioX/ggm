@@ -25,34 +25,47 @@
       <button type="button" class="activity-item nav-item" data-view="settings" title="Configurações" aria-label="Configurações"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19 13 2-.3v-1.4l-2-.3a7 7 0 0 0-.8-1.8l1.2-1.6-1-1-1.7 1.1a7 7 0 0 0-1.8-.7L14.6 3h-1.4l-.3 2a7 7 0 0 0-1.8.7L9.5 4.6l-1 1 1.1 1.7a7 7 0 0 0-.7 1.8l-2 .3v1.4l2 .3a7 7 0 0 0 .7 1.8l-1.1 1.7 1 1 1.6-1.1a7 7 0 0 0 1.8.7l.3 2h1.4l.3-2a7 7 0 0 0 1.8-.7l1.7 1.1 1-1-1.2-1.7a7 7 0 0 0 .8-1.8Z"/></svg><i class="activity-indicator"></i></button>
     </div>
   </nav>
-  <aside class="sidebar">
+  <aside class="sidebar chat-sidebar">
       <div class="brand">
         <div class="brand-mark">▲</div>
-        <div>
-          <div class="brand-title">LUPID</div>
-          <div class="brand-subtitle">WORKSPACE INTELIGENTE</div>
+        <div class="brand-copy"><div class="brand-title">GODMODE</div><div class="brand-subtitle">AI WORKSPACE</div></div>
+        <button id="sidebar-collapse" class="sidebar-icon-button" type="button" title="Recolher painel">‹</button>
+      </div>
+
+      <button id="new-chat-side" class="sidebar-new-chat" type="button">
+        <span class="sidebar-action-icon">＋</span><span>Nova conversa</span><kbd>Ctrl K</kbd>
+      </button>
+      <label class="sidebar-search-wrap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.5 4.5"/></svg>
+        <input id="sidebar-search" type="search" placeholder="Pesquisar conversas e projetos" autocomplete="off">
+        <kbd>⌘K</kbd>
+      </label>
+
+      <nav class="sidebar-shortcuts" aria-label="Navegação principal">
+        <button type="button" class="sidebar-link" data-view="files"><span>▤</span> Arquivos</button>
+        <button type="button" class="sidebar-link" data-view="agents"><span>⌘</span> Agentes</button>
+        <button type="button" class="sidebar-link" data-view="mcp"><span>◇</span> Plugins</button>
+        <button type="button" class="sidebar-link" data-view="providers"><span>◉</span> Modelos e provedores</button>
+      </nav>
+
+      <section class="sidebar-section sidebar-projects">
+        <div class="sidebar-section-heading">
+          <span>Projetos</span>
+          <button id="sidebar-add-project" type="button" class="sidebar-icon-button" title="Novo projeto">＋</button>
         </div>
-      </div>
+        <div id="sidebar-project-list" class="sidebar-project-list"></div>
+        <button id="sidebar-all-projects" class="sidebar-muted-link" type="button" data-view="projects">Ver todos os projetos</button>
+      </section>
 
-      <div class="workspace-label">WORKSPACE</div>
-      <div class="project-selector-wrap" style="padding: 0 10px 12px 10px;">
-        <select id="project-selector" class="select compact" style="width: 100%;"></select>
-      </div>
-
-      <div class="sidebar-divider"></div>
-      <div class="conversation-heading">
-        <span>CONVERSAS</span>
-        <button id="new-chat-side" class="icon-button" title="Nova conversa">＋</button>
-      </div>
-      <div id="conversation-list" class="conversation-list"></div>
+      <section class="sidebar-section sidebar-recents">
+        <div class="sidebar-section-heading"><span>Recentes</span><button type="button" id="sidebar-search-clear" class="sidebar-icon-button" title="Limpar busca" hidden>×</button></div>
+        <div id="conversation-list" class="conversation-list"></div>
+      </section>
 
       <div class="sidebar-bottom">
         <span id="gateway-indicator" class="status-dot"></span>
-        <div>
-          <div class="sidebar-status">Núcleo LUPID</div>
-          <div id="gateway-status" class="sidebar-meta">Verificando conexão…</div>
-        </div>
-        <span class="local-lock" title="Execução estritamente local (loopback)">🔒</span>
+        <div class="sidebar-status-copy"><div class="sidebar-status">GODMODE CORE</div><div id="gateway-status" class="sidebar-meta">Verificando conexão…</div></div>
+        <button type="button" class="sidebar-settings-link" data-view="settings" title="Configurações">⚙</button>
       </div>
     </aside>
 
@@ -80,8 +93,13 @@
             </div>
           </div>
           <div class="chat-controls">
-            <label class="inline-label" for="chat-provider">MODELO</label>
-            <select id="chat-provider" class="select compact"></select>
+            <select id="chat-provider" class="select compact" aria-label="Provedor de IA"></select>
+            <label class="chat-model-control">
+              <span class="sr-only">Modelo</span>
+              <input id="chat-model" type="search" list="chat-model-options" placeholder="Digite ou pesquise um modelo…" autocomplete="off" spellcheck="false" aria-label="Selecionar ou digitar o modelo">
+              <datalist id="chat-model-options"></datalist>
+              <button type="button" id="refresh-chat-models" class="chat-model-refresh" title="Atualizar lista de modelos">↻</button>
+            </label>
             <label class="toggle-label">
               <input id="tools-toggle" type="checkbox" checked>
               <span class="toggle"></span>
@@ -244,7 +262,7 @@
         <div class="section-heading">
           <div><h3>Especialistas disponíveis</h3><p>Perfis cognitivos usados pelo orquestrador. A execução acontece no provedor configurado.</p></div>
         </div>
-        <div id="specialists-grid" class="mcp-server-grid"></div>
+        <div id="specialists-grid" class="specialist-list-rows"></div>
       </section>
 
       <!-- VIEW 4: PROJETOS -->
@@ -264,7 +282,7 @@
           </div>
           <div class="memory-list-wrap">
             <div class="section-heading"><div><h3>Projetos Cadastrados</h3><p id="projects-count">Carregando…</p></div></div>
-            <div id="project-list" class="mcp-server-grid"></div>
+            <div id="project-list" class="project-list-rows"></div>
           </div>
         </div>
       </section>
@@ -426,8 +444,11 @@
       <!-- VIEW 8: PROVEDORES DE IA -->
       <section id="view-providers" class="view">
         <div class="view-intro">
-          <div><h2>Provedores de IA & Model Router</h2><p>Conecte Ollama, LM Studio, llama.cpp ou OpenRouter com roteamento inteligente e fallback.</p></div>
-          <button id="add-provider" class="button primary small">＋ Novo Provedor</button>
+          <div><h2>Modelos e provedores</h2><p>Escolha modelos locais, provedores externos ou envie tudo por um gateway de roteamento.</p></div>
+          <div class="provider-view-actions">
+            <button id="setup-omniroute" class="button secondary small" type="button">Conectar OmniRoute</button>
+            <button id="add-provider" class="button primary small">＋ Novo provedor</button>
+          </div>
         </div>
         <div id="provider-form-wrap" class="panel" style="margin-bottom:18px;" hidden>
           <div class="panel-heading">
@@ -435,17 +456,24 @@
             <button id="close-provider-form" class="button secondary small" type="button">Fechar</button>
           </div>
           <form id="provider-form" class="stack-form">
-            <label>ID<input id="provider-id" required pattern="[a-z0-9_-]+" placeholder="ex: ollama-local"></label>
-            <label>Nome Amigável<input id="provider-name" required placeholder="ex: Ollama Llama 3"></label>
-            <label>Endpoint Base URL<input id="provider-url" required placeholder="http://127.0.0.1:11434/v1"></label>
-            <label>Identificador do Modelo<input id="provider-model" placeholder="qwen2.5-coder:7b"></label>
-            <div style="display:flex;gap:8px;margin-top:6px;">
-              <button id="discover-models" class="button secondary" type="button">Buscar Modelos Disponíveis</button>
-              <button class="button primary" type="submit">Salvar Provedor</button>
+            <div class="provider-form-grid">
+              <label>ID<input id="provider-id" required pattern="[a-z0-9_-]+" placeholder="ex: ollama-local"></label>
+              <label>Nome<input id="provider-name" required placeholder="ex: Ollama local"></label>
+              <label class="provider-form-wide">Endpoint Base URL<input id="provider-url" required placeholder="http://127.0.0.1:11434/v1"></label>
+              <label class="provider-form-wide">Chave de API <span class="field-muted">(opcional para Ollama; usada no OmniRoute)</span><input id="provider-secret" type="password" autocomplete="new-password" placeholder="Chave do gateway / provedor"></label>
+              <label class="provider-form-wide">Modelo padrão
+                <input id="provider-model" list="provider-model-options" placeholder="Digite Qwen, selecione da lista ou informe o ID">
+                <datalist id="provider-model-options"></datalist>
+              </label>
             </div>
+            <div class="provider-form-actions">
+              <button id="discover-models" class="button secondary" type="button">↻ Atualizar modelos</button>
+              <button class="button primary" type="submit">Salvar provedor</button>
+            </div>
+            <p class="muted-note">A lista mostra os modelos disponíveis no endpoint. Você também pode digitar qualquer identificador manualmente.</p>
           </form>
         </div>
-        <div id="provider-list" class="mcp-server-grid"></div>
+        <div id="provider-list" class="provider-list-rows"></div>
       </section>
 
       <!-- VIEW 9: SISTEMA & API -->
