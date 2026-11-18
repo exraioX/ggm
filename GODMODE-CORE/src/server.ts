@@ -221,11 +221,32 @@ async function continueAgent(session: AgentSession): Promise<Record<string, unkn
           const result = mapping.server === 'built-in'
             ? await agentToolsHandler.executeTool(mapping.name, args, session.workspace || WORKSPACE, session.id)
             : await mcpRegistry.callTool(mapping.server, mapping.name, args);
-          session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializeToolResult(result) });
-          monitor.emit({ type: 'tool_result', agentId: session.id, sessionId: session.id, tool: toolCall.function.name, durationMs: Date.now() - toolStart, isError: Boolean(result?.isError), timestamp: Date.now() });
+          const serializedResult = serializeToolResult(result);
+          session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializedResult });
+          monitor.emit({
+            type: 'tool_result',
+            agentId: session.id,
+            sessionId: session.id,
+            tool: toolCall.function.name,
+            durationMs: Date.now() - toolStart,
+            isError: Boolean(result?.isError),
+            output: serializedResult.slice(0, 6000),
+            exitCode: typeof result?.exitCode === 'number' ? result.exitCode : undefined,
+            timestamp: Date.now(),
+          });
         } catch (error) {
-          session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: `Falha na ferramenta: ${error instanceof Error ? error.message : String(error)}` });
-          monitor.emit({ type: 'tool_result', agentId: session.id, sessionId: session.id, tool: toolCall.function.name, durationMs: Date.now() - toolStart, isError: true, timestamp: Date.now() });
+          const message = `Falha na ferramenta: ${error instanceof Error ? error.message : String(error)}`;
+          session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: message });
+          monitor.emit({
+            type: 'tool_result',
+            agentId: session.id,
+            sessionId: session.id,
+            tool: toolCall.function.name,
+            durationMs: Date.now() - toolStart,
+            isError: true,
+            output: message,
+            timestamp: Date.now(),
+          });
         }
         session.nextToolIndex += 1;
       }
@@ -744,12 +765,36 @@ async function processApproval(approvalId: string, approved: boolean): Promise<R
     if (typeof fileArg === 'string' && mapping.requiresApproval) {
       await checkpointManager.createCheckpoint(session.id, [fileArg]);
     }
+    const toolStart = Date.now();
     const result = mapping.server === 'built-in'
       ? await agentToolsHandler.executeTool(mapping.name, args, session.workspace || WORKSPACE, session.id)
       : await mcpRegistry.callTool(mapping.server, mapping.name, args);
-    session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializeToolResult(result) });
+    const serializedResult = serializeToolResult(result);
+    session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializedResult });
+    monitor.emit({
+      type: 'tool_result',
+      agentId: session.id,
+      sessionId: session.id,
+      tool: toolCall.function.name,
+      durationMs: Date.now() - toolStart,
+      isError: Boolean(result?.isError),
+      output: serializedResult.slice(0, 6000),
+      exitCode: typeof result?.exitCode === 'number' ? result.exitCode : undefined,
+      timestamp: Date.now(),
+    });
   } catch (error) {
-    session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: `A ação aprovada falhou: ${error instanceof Error ? error.message : String(error)}` });
+    const message = `A ação aprovada falhou: ${error instanceof Error ? error.message : String(error)}`;
+    session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: message });
+    monitor.emit({
+      type: 'tool_result',
+      agentId: session.id,
+      sessionId: session.id,
+      tool: toolCall.function.name,
+      durationMs: 0,
+      isError: true,
+      output: message,
+      timestamp: Date.now(),
+    });
   }
   session.nextToolIndex += 1;
   return await continueAgent(session);
