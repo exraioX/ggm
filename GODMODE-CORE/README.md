@@ -92,7 +92,7 @@ Na aba **Integrações MCP**, cole ou selecione um JSON como este:
 }
 ```
 
-No exemplo acima, `npx.cmd` é usado para Windows; em macOS/Linux, use `npx`. O importador **mescla** os servidores: nomes novos são adicionados e nomes iguais são atualizados; os demais não são apagados. Importar apenas registra a configuração. Um servidor `stdio` só é iniciado quando você clicar em **Conectar**. Nunca importe configurações de origem desconhecida sem conferir `command`, `args`, `cwd`, `url` e os cabeçalhos.
+No exemplo acima, `npx.cmd` é usado para Windows; em macOS/Linux, use `npx`. O importador **mescla** os servidores: nomes novos são adicionados e nomes iguais são atualizados; os demais não são apagados. Depois da importação, o backend inicia automaticamente servidores habilitados, exceto os identificados como pesados (Playwright, Crawl4AI, ZAP, Ghidra, Trivy, Grype, Nmap, Nuclei e Amass) ou aqueles com `"autoStart": false`. Esses servidores ficam disponíveis para a IA por meio da ferramenta interna `start_mcp_server`, que exige aprovação antes de iniciar um processo local. A tela não possui botões de conectar/desconectar. Nunca importe configurações de origem desconhecida sem conferir `command`, `args`, `cwd`, `url` e os cabeçalhos; a importação solicita confirmação porque pode iniciar processos locais.
 
 Para servidores HTTP, o núcleo aceita apenas HTTPS ou HTTP em loopback. URLs com usuário/senha embutidos ou fragmento são rejeitadas; query strings são aceitas, mas removidas da URL exibida na interface. Prefira `headers` para autenticação. Para não gravar segredos no arquivo `mcp-servers.json`, prefira placeholders como `${MCP_TOKEN}` e defina a variável no ambiente que inicia o processo GODMODE CORE.
 
@@ -102,11 +102,15 @@ Formato e diretório padrão do arquivo do Claude Desktop variam por sistema e i
 
 O receptor integra **servidores que implementam o Model Context Protocol (MCP)**. Isso não significa que todo plugin, skill, extensão, comando ou integração exclusiva do Claude seja automaticamente compatível. Recursos que não falam MCP precisam de um adaptador específico. OAuth interativo não foi implementado nesta primeira versão; autenticação HTTP usa cabeçalhos estáticos/variáveis de ambiente. A primeira versão expõe tools, resources e prompts; sampling, elicitation, roots, notificações/subscrições de recursos e tasks não foram implementados como fluxos completos do cliente.
 
+Consulte [docs/MCP-AUTO-START.md](docs/MCP-AUTO-START.md) para a configuração de inicialização automática, servidores sob demanda e a ferramenta interna de carregamento de MCP.
+
 ## Segurança e aprovações
 
 - O servidor escuta em `127.0.0.1` (não use `0.0.0.0`).
-- A configuração MCP importada não é executada automaticamente.
-- Conexão `stdio` inicia o executável informado pelo usuário; a interface mostra comando/argumentos e solicita confirmação antes de conectar. A conexão em lote também pede confirmação.
+- Na primeira inicialização, se ainda não existir `~/.godmode/mcp-servers.json`, o Core cria uma configuração com Filesystem, Memory e Sequential Thinking e inicia esses três servidores automaticamente.
+- A inicialização automática é controlada por `GODMODE_MCP_AUTOSTART=false`; `GODMODE_MCP_DEFAULTS=false` impede a criação dos servidores padrão.
+- Importar configurações solicita confirmação e inicia os servidores autorizados pela política `autoStart`; servidores pesados ficam sob demanda e só são iniciados pela IA após aprovação.
+- Processos MCP são executáveis locais confiáveis, não sandboxes. A aprovação do GODMODE não substitui ACLs do Windows, isolamento de contêineres ou revisão da origem do pacote.
 - Ferramentas com indicação destrutiva ou nomes de escrita/execução/instalação sempre exigem aprovação. Ferramentas sem indicação confiável de leitura também exigem aprovação.
 - Caminhos fora de `GODMODE_WORKSPACE` exigem aprovação adicional.
 - Aprovações são de uso único e expiram após 15 minutos; sessões de agente ficam na memória do processo.
@@ -122,6 +126,8 @@ A proteção de aprovação é uma camada de controle do núcleo, não um sandbo
 - `npm test` — testes locais de validação de endpoint, CORS, permissões e configuração MCP.
 - `GET /api/providers` — provedores (credenciais redigidas).
 - `GET /api/mcp/servers` — servidores configurados e estado das conexões.
+- `GET /api/mcp/startup` — estado e resultado da inicialização automática.
+- `autoStart: true|false` — controla a inicialização; ferramentas pesadas podem ser solicitadas pela IA via `start_mcp_server`.
 - `POST /api/mcp/import` — importa/mescla um objeto com `mcpServers`.
 - `GET /api/mcp/tools`, `/api/mcp/resources` e `/api/mcp/prompts` — capacidades anunciadas pelos servidores conectados.
 - `POST /api/mcp/resources/read` e `/api/mcp/prompts/get` — leitura de recurso e obtenção de prompt sob demanda.

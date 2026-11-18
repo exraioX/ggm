@@ -3,15 +3,18 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { MCP_CONFIG_PATH, WORKSPACE, readJson, safeWriteJson } from './config.js';
 import { interpolateEnv, isAllowedEndpoint } from './security.js';
+import { createDefaultMcpConfig } from './mcp-defaults.js';
 
 export type McpMode = 'stdio' | 'streamable-http' | 'sse' | 'auto';
 export interface McpServerDefinition {
   name: string;
   description?: string;
   enabled?: boolean;
+  autoStart?: boolean;
   command?: string;
   args?: string[];
   cwd?: string;
@@ -30,6 +33,19 @@ interface LiveServer {
   mode: McpMode;
 }
 interface ClaudeConfig { mcpServers?: Record<string, Record<string, unknown>> }
+
+const ON_DEMAND_SERVER_NAMES = new Set([
+  'playwright', 'crawl4ai', 'owasp-zap', 'ghidra',
+  'trivy', 'grype', 'nmap', 'nuclei', 'amass'
+]);
+
+function isOnDemandByDefault(name: string, raw: Record<string, unknown>): boolean {
+  const mode = String(raw.startupMode || raw.startup_mode || raw.startup || '').toLowerCase();
+  const resourceProfile = String(raw.resourceProfile || raw.resource_profile || '').toLowerCase();
+  return ['on-demand', 'on_demand', 'lazy'].includes(mode)
+    || resourceProfile === 'heavy'
+    || ON_DEMAND_SERVER_NAMES.has(name.toLowerCase());
+}
 
 function validName(name: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(name);
@@ -60,6 +76,7 @@ function normalizeDefinition(name: string, raw: Record<string, unknown>): McpSer
       name,
       description: typeof raw.description === 'string' ? raw.description.slice(0, 1000) : '',
       enabled: raw.disabled !== true && raw.enabled !== false,
+      autoStart: raw.autoStart === true || (raw.autoStart !== false && !isOnDemandByDefault(name, raw)),
       command,
       args,
       env,
@@ -77,6 +94,7 @@ function normalizeDefinition(name: string, raw: Record<string, unknown>): McpSer
       name,
       description: typeof raw.description === 'string' ? raw.description.slice(0, 1000) : '',
       enabled: raw.disabled !== true && raw.enabled !== false,
+      autoStart: raw.autoStart === true || (raw.autoStart !== false && !isOnDemandByDefault(name, raw)),
       url,
       headers,
       transport: mode === 'stdio' ? 'auto' : mode,
@@ -131,35 +149,63 @@ function redact(definition: McpServerDefinition) {
 export class McpRegistry {
   private definitions: McpServerDefinition[];
   private readonly live = new Map<string, LiveServer>();
+  private readonly connecting = new Map<string, Promise<any>>();
   private readonly errors = new Map<string, string>();
 
   constructor() {
-    const stored = readJson<unknown>(MCP_CONFIG_PATH, { mcpServers: {} });
-    try { this.definitions = parseMcpConfig(stored); }
-    catch (error) {
+    const hasStoredConfig = existsSync(MCP_CONFIG_PATH);
+    const initialConfig = hasStoredConfig
+      ? readJson<unknown>(MCP_CONFIG_PATH, { mcpServers: {} })
+      : process.env.GODMODE_MCP_DEFAULTS === 'false'
+        ? { mcpServers: {} }
+        : createDefaultMcpConfig();
+    try {
+      this.definitions = parseMcpConfig(initialConfig);
+      if (!hasStoredConfig) safeWriteJson(MCP_CONFIG_PATH, initialConfig);
+    } catch (error) {
       this.definitions = [];
       this.errors.set('config', error instanceof Error ? error.message : String(error));
     }
   }
 
   listConfigured() {
-    return this.definitions.map(def => ({
-      ...redact(def),
-      connected: this.live.has(def.name),
-      tools: this.live.get(def.name)?.tools.length || 0,
-      resources: this.live.get(def.name)?.resources.length || 0,
-      prompts: this.live.get(def.name)?.prompts.length || 0,
-      connectedAt: this.live.get(def.name)?.connectedAt || null,
-      connectedTransport: this.live.get(def.name)?.mode || null,
-      error: this.errors.get(def.name) || null,
-      headerCount: Object.keys(def.headers || {}).length,
-    }));
+    return this.definitions.map(def => {
+      const live = this.live.get(def.name);
+      const error = this.errors.get(def.name) || null;
+      const connected = Boolean(live);
+      const connecting = this.connecting.has(def.name);
+      const status = connected ? 'connected'
+        : connecting ? 'connecting'
+          : error ? 'error'
+            : def.enabled === false ? 'disabled'
+              : def.autoStart && process.env.GODMODE_MCP_AUTOSTART !== 'false' ? 'waiting'
+                : 'on-demand';
+      return {
+        ...redact(def),
+        connected,
+        connecting,
+        status,
+        tools: live?.tools.length || 0,
+        resources: live?.resources.length || 0,
+        prompts: live?.prompts.length || 0,
+        connectedAt: live?.connectedAt || null,
+        connectedTransport: live?.mode || null,
+        error,
+        headerCount: Object.keys(def.headers || {}).length,
+      };
+    });
+  }
+
+  listAvailableToStart() {
+    return this.definitions
+      .filter(def => def.enabled !== false && !this.live.has(def.name) && !this.connecting.has(def.name))
+      .map(def => ({ name: def.name, description: def.description || '', transport: def.transport || (def.command ? 'stdio' : 'http') }));
   }
 
   private definitionToRaw(def: McpServerDefinition): Record<string, unknown> {
     return def.command
-      ? { command: def.command, args: def.args || [], cwd: def.cwd, env: def.env || {}, description: def.description, disabled: def.enabled === false }
-      : { url: def.url, transport: def.transport, headers: def.headers || {}, description: def.description, disabled: def.enabled === false };
+      ? { command: def.command, args: def.args || [], cwd: def.cwd, env: def.env || {}, description: def.description, enabled: def.enabled !== false, autoStart: def.autoStart !== false, disabled: def.enabled === false }
+      : { url: def.url, transport: def.transport, headers: def.headers || {}, description: def.description, enabled: def.enabled !== false, autoStart: def.autoStart !== false, disabled: def.enabled === false };
   }
 
   getConfigForExport(): { mcpServers: Record<string, unknown> } {
@@ -257,7 +303,19 @@ export class McpRegistry {
     }
   }
 
-  async connect(name: string) {
+  async connect(name: string): Promise<any> {
+    const pending = this.connecting.get(name);
+    if (pending) return pending;
+    const operation = this.connectInternal(name);
+    this.connecting.set(name, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.connecting.get(name) === operation) this.connecting.delete(name);
+    }
+  }
+
+  private async connectInternal(name: string) {
     const def = this.definitions.find(item => item.name === name);
     if (!def) throw new Error(`Servidor MCP desconhecido: ${name}`);
     if (def.enabled === false) throw new Error(`${name} está desativado. Ative-o na configuração antes de conectar.`);
@@ -314,6 +372,32 @@ export class McpRegistry {
       try { results.push({ name: def.name, ok: true, status: await this.connect(def.name) }); }
       catch (error) { results.push({ name: def.name, ok: false, error: error instanceof Error ? error.message : String(error) }); }
     }
+    return results;
+  }
+
+  async connectAutoStart() {
+    if (process.env.GODMODE_MCP_AUTOSTART === 'false') return [];
+    const targets = this.definitions.filter(def => def.enabled !== false && def.autoStart === true);
+    const results: Array<{ name: string; ok: boolean; error?: string }> = new Array(targets.length);
+    let cursor = 0;
+    const worker = async () => {
+      while (true) {
+        const index = cursor++;
+        const definition = targets[index];
+        if (!definition) return;
+        try {
+          await this.connect(definition.name);
+          results[index] = { name: definition.name, ok: true };
+        } catch (error) {
+          results[index] = {
+            name: definition.name,
+            ok: false,
+            error: (error instanceof Error ? error.message : String(error)).slice(0, 1200),
+          };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(2, targets.length) }, () => worker()));
     return results;
   }
 

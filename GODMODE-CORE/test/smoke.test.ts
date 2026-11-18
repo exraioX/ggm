@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { isAllowedEndpoint, isAllowedLocalOrigin, toolRequiresApproval, hasPathOutsideWorkspace, interpolateEnv } from '../src/security.js';
 import { parseMcpConfig } from '../src/mcp-registry.js';
+import { createDefaultMcpConfig } from '../src/mcp-defaults.js';
 import { evaluateResearchResponse, summarizeVerdicts } from '../src/research-evaluation.js';
 
 test('endpoints permitem loopback HTTP e HTTPS, mas recusam HTTP remoto e credenciais embutidas', () => {
@@ -45,6 +46,27 @@ test('importação MCP aceita formato Claude Desktop stdio e HTTP', () => {
   assert.equal(parsed.find(item => item.name === 'filesystem')?.transport, 'stdio');
   assert.equal(parsed.find(item => item.name === 'remote')?.transport, 'streamable-http');
   assert.equal(parsed.find(item => item.name === 'legacy')?.transport, 'sse');
+  assert.equal(parsed.find(item => item.name === 'filesystem')?.autoStart, true);
+  assert.equal(parsed.find(item => item.name === 'remote')?.autoStart, true);
+});
+
+test('MCP pesado pode ficar sob demanda e não é conectado no boot', () => {
+  const parsed = parseMcpConfig({
+    mcpServers: {
+      playwright: { command: 'npx', args: ['-y', '@playwright/mcp'], resource_profile: 'heavy' },
+      custom: { command: 'node', args: ['server.js'], autoStart: false },
+      ordinary: { command: 'node', args: ['server.js'] }
+    }
+  });
+  assert.equal(parsed.find(item => item.name === 'playwright')?.autoStart, false);
+  assert.equal(parsed.find(item => item.name === 'custom')?.autoStart, false);
+  assert.equal(parsed.find(item => item.name === 'ordinary')?.autoStart, true);
+});
+
+test('configuração padrão inicializa somente MCPs essenciais e leves', () => {
+  const defaults = parseMcpConfig(createDefaultMcpConfig());
+  assert.deepEqual(defaults.map(item => item.name).sort(), ['filesystem', 'memory', 'sequential-thinking']);
+  assert.ok(defaults.every(item => item.autoStart === true));
 });
 
 test('importação MCP rejeita servidores inválidos e HTTP inseguro', () => {

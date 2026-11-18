@@ -46,7 +46,7 @@
         <div id="chat-empty" class="empty-state">
           <div class="empty-symbol">✳</div>
           <h2>Um espaço de trabalho independente.</h2>
-          <p>Converse com modelos locais ou provedores externos. Conecte ferramentas MCP e permita que o agente as use com aprovação.</p>
+          <p>Converse com modelos locais ou provedores externos. O GODMODE inicia ferramentas MCP automaticamente e a IA pode solicitar ferramentas pesadas quando necessário.</p>
           <div class="quick-prompts"><button class="prompt-card" data-prompt="Analise a estrutura do workspace e resuma os principais componentes."><span>⌕</span><strong>Explorar projeto</strong><small>Entenda a estrutura do código</small></button><button class="prompt-card" data-prompt="Ajude-me a planejar uma melhoria neste projeto. Primeiro investigue e apresente um plano, sem modificar arquivos."><span>◫</span><strong>Planejar melhoria</strong><small>Investigue antes de alterar</small></button></div>
         </div>
         <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
@@ -94,12 +94,12 @@
     }
   }
 }'></textarea>
-          <div class="import-footer"><span>Use <code>${NOME_DA_VARIAVEL}</code> para referenciar variáveis de ambiente sem gravar tokens no JSON.</span><button id="import-mcp" class="button primary">Validar e importar</button></div>
+          <div class="import-footer"><span>Use <code>${NOME_DA_VARIAVEL}</code> para referenciar variáveis de ambiente sem gravar tokens no JSON. Ao importar, servidores leves iniciam automaticamente; os pesados podem ser iniciados pela IA sob demanda.</span><button id="import-mcp" class="button primary">Validar e importar</button></div>
           <div id="mcp-import-feedback" class="feedback" aria-live="polite"></div>
         </div>
-        <div class="section-heading"><div><h3>Servidores configurados</h3><p>Conecte somente os servidores que reconhece e deseja executar.</p></div><button id="connect-all-mcp" class="button secondary small">Conectar habilitados</button></div>
+        <div class="section-heading"><div><h3>Servidores gerenciados pelo GODMODE</h3><p>O núcleo inicia automaticamente os servidores habilitados. Ferramentas pesadas são carregadas pela IA quando necessárias, com aprovação.</p></div></div>
         <div id="mcp-server-list" class="mcp-server-grid"></div>
-        <div class="panel tools-panel"><div class="panel-heading"><div><h3>Ferramentas descobertas</h3><p>Ferramentas sem indicação confiável de leitura exigem aprovação antes de executar.</p></div><span id="tools-count" class="count-pill">0 ferramentas</span></div><div id="mcp-tools-list" class="tools-list"><div class="empty-inline">Conecte um servidor MCP para descobrir suas ferramentas.</div></div></div>
+        <div class="panel tools-panel"><div class="panel-heading"><div><h3>Ferramentas descobertas</h3><p>Ferramentas sem indicação confiável de leitura exigem aprovação antes de executar.</p></div><span id="tools-count" class="count-pill">0 ferramentas</span></div><div id="mcp-tools-list" class="tools-list"><div class="empty-inline">As ferramentas serão descobertas automaticamente durante a inicialização do GODMODE.</div></div></div>
         <div class="capability-grid">
           <div class="panel"><div class="panel-heading"><div><h3>Recursos MCP</h3><p>Conteúdos publicados pelos servidores, que podem ser lidos sob demanda.</p></div><span id="resources-count" class="count-pill">0 recursos</span></div><div id="mcp-resources-list" class="capability-list"><div class="empty-inline">Nenhum recurso anunciado.</div></div></div>
           <div class="panel"><div class="panel-heading"><div><h3>Prompts MCP</h3><p>Modelos de prompt oferecidos pelos servidores, sem inserção automática na conversa.</p></div><span id="prompts-count" class="count-pill">0 prompts</span></div><div id="mcp-prompts-list" class="capability-list"><div class="empty-inline">Nenhum prompt anunciado.</div></div></div>

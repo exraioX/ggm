@@ -64,6 +64,8 @@ interface ApprovalRecord {
 const sessions = new Map<string, AgentSession>();
 const approvals = new Map<string, ApprovalRecord>();
 const MAX_STEPS = 8;
+let mcpStartupPromise: Promise<any[]> = Promise.resolve([]);
+let mcpStartupResults: any[] = [];
 const SESSION_TTL_MS = 15 * 60 * 1000;
 const memories = () => readJson<MemoryItem[]>(MEMORY_PATH, []);
 const SYSTEM_PROMPT = `Você é GODMODE CORE, um agente local de desenvolvimento e engenharia de software.
@@ -100,6 +102,28 @@ function buildToolMap(): Map<string, ToolMapping> {
       inputSchema: item.inputSchema,
       annotations: item.annotations,
       requiresApproval: toolRequiresApproval({ name: item.name, annotations: item.annotations }),
+    });
+  }
+  const availableServers = mcpRegistry.listAvailableToStart();
+  if (availableServers.length) {
+    map.set('godmode_start_mcp_server', {
+      server: 'godmode',
+      name: 'start_mcp_server',
+      description: 'Inicializa um servidor MCP local já configurado para uso sob demanda e incorpora as ferramentas descobertas nesta conversa. A inicialização de processos locais exige aprovação do usuário.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          server: {
+            type: 'string',
+            enum: availableServers.map(item => item.name),
+            description: 'Identificador exato do servidor MCP que deve ser inicializado.',
+          },
+        },
+        required: ['server'],
+        additionalProperties: false,
+      },
+      annotations: { destructiveHint: false },
+      requiresApproval: true,
     });
   }
   return map;
@@ -159,8 +183,22 @@ async function continueAgent(session: AgentSession): Promise<Record<string, unkn
         return publicApproval(session, toolCall, mapping, args, approvalId);
       }
       try {
-        const result = await mcpRegistry.callTool(mapping.server, mapping.name, args);
-        session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializeToolResult(result) });
+        if (mapping.server === 'godmode' && mapping.name === 'start_mcp_server') {
+          const serverName = typeof args.server === 'string' ? args.server : '';
+          if (!mcpRegistry.listAvailableToStart().some(item => item.name === serverName)) {
+            throw new Error('Servidor indisponível para inicialização sob demanda.');
+          }
+          const status = await mcpRegistry.connect(serverName);
+          session.toolMap = buildToolMap();
+          session.messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ ok: true, server: serverName, status, message: 'Servidor MCP iniciado; ferramentas descobertas foram adicionadas ao catálogo desta conversa.' }),
+          });
+        } else {
+          const result = await mcpRegistry.callTool(mapping.server, mapping.name, args);
+          session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializeToolResult(result) });
+        }
       } catch (error) {
         session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: `Falha na ferramenta MCP: ${error instanceof Error ? error.message : String(error)}` });
       }
@@ -221,7 +259,7 @@ app.get('/api/info', (_req, res) => res.json({
   api: 'REST + OpenAI-compatible',
   mcpTransports: ['stdio', 'streamable-http', 'sse'],
   workspace: WORKSPACE,
-  capabilities: ['providers', 'chat', 'mcp-tools', 'mcp-resources', 'mcp-prompts', 'approvals', 'persistent-memory', 'research-lab', 'claude-code-skills'],
+  capabilities: ['providers', 'chat', 'mcp-tools', 'mcp-resources', 'mcp-prompts', 'mcp-auto-start', 'mcp-on-demand-tool-loading', 'approvals', 'persistent-memory', 'research-lab', 'claude-code-skills'],
 }));
 app.get('/api/providers', (_req, res) => res.json({ providers: providerRegistry.list() }));
 app.post('/api/providers', (req, res) => {
@@ -245,6 +283,12 @@ app.get('/api/providers/:id/models', async (req, res) => {
 
 // Generic MCP configuration compatible with Claude Desktop's mcpServers object.
 app.get('/api/mcp/servers', (_req, res) => res.json({ servers: mcpRegistry.listConfigured(), configPath: 'user-profile/.godmode/mcp-servers.json' }));
+app.get('/api/mcp/startup', (_req, res) => res.json({
+  enabled: process.env.GODMODE_MCP_AUTOSTART !== 'false',
+  pending: mcpRegistry.listConfigured().some(server => server.status === 'connecting'),
+  results: mcpStartupResults,
+  servers: mcpRegistry.listConfigured(),
+}));
 app.get('/api/mcp/tools', (_req, res) => res.json({ tools: mcpRegistry.listTools().map(tool => ({
   ...tool,
   requiresApproval: toolRequiresApproval({ name: tool.name, annotations: tool.annotations }),
@@ -271,7 +315,11 @@ app.post('/api/mcp/import', async (req, res) => {
   try {
     const imported = parseMcpConfig(req.body).length;
     const servers = await mcpRegistry.mergeConfig(req.body);
-    res.json({ ok: true, imported, servers });
+    if (process.env.GODMODE_MCP_AUTOSTART !== 'false') {
+      mcpStartupPromise = mcpRegistry.connectAutoStart();
+      void mcpStartupPromise.then(results => { mcpStartupResults = results; });
+    }
+    res.json({ ok: true, imported, autoStartQueued: process.env.GODMODE_MCP_AUTOSTART !== 'false', servers: mcpRegistry.listConfigured() });
   } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : String(error) }); }
 });
 app.post('/api/mcp/servers/:name/connect', async (req, res) => {
@@ -318,6 +366,7 @@ app.delete('/api/memory/:id', (req, res) => {
 // Agent chat with per-tool approval gate.
 app.post('/api/chat', async (req, res) => {
   try {
+    await mcpStartupPromise;
     const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : '';
     const provider = providerRegistry.get(providerId);
     if (!provider || !provider.model.trim()) { res.status(400).json({ error: 'Selecione um provedor e configure o identificador do modelo.' }); return; }
@@ -362,8 +411,22 @@ async function processApproval(approvalId: string, approved: boolean): Promise<R
   const args = JSON.parse(toolCall.function.arguments || '{}') as Record<string, unknown>;
   session.pendingApproval = undefined;
   try {
-    const result = await mcpRegistry.callTool(mapping.server, mapping.name, args);
-    session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializeToolResult(result) });
+    if (mapping.server === 'godmode' && mapping.name === 'start_mcp_server') {
+      const serverName = typeof args.server === 'string' ? args.server : '';
+      if (!mcpRegistry.listAvailableToStart().some(item => item.name === serverName)) {
+        throw new Error('Servidor indisponível para inicialização sob demanda.');
+      }
+      const status = await mcpRegistry.connect(serverName);
+      session.toolMap = buildToolMap();
+      session.messages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify({ ok: true, server: serverName, status, message: 'Servidor MCP iniciado; ferramentas descobertas foram adicionadas ao catálogo desta conversa.' }),
+      });
+    } else {
+      const result = await mcpRegistry.callTool(mapping.server, mapping.name, args);
+      session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: serializeToolResult(result) });
+    }
   } catch (error) {
     session.messages.push({ role: 'tool', tool_call_id: toolCall.id, content: `A ação aprovada falhou: ${error instanceof Error ? error.message : String(error)}` });
   }
@@ -394,6 +457,7 @@ app.post('/api/lab/servers/:name/disconnect', async (req, res) => {
 });
 app.post('/api/lab/agent/run', async (req, res) => {
   try {
+    await mcpStartupPromise;
     const { goal, model, baseURL, apiKey, memories: suppliedMemories } = req.body || {};
     if (typeof goal !== 'string' || !goal.trim() || goal.length > 12000) { res.status(400).json({ error: 'Informe uma tarefa entre 1 e 12.000 caracteres.' }); return; }
     if (typeof model !== 'string' || !model.trim() || model.length > 200) { res.status(400).json({ error: 'Informe um identificador de modelo válido.' }); return; }
@@ -467,9 +531,22 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`[GODMODE CORE] API: http://${HOST}:${PORT}/api/health`);
   console.log(`[GODMODE CORE] Workspace: ${WORKSPACE}`);
   console.log('[GODMODE CORE] Acesso restrito a loopback. Chaves não são gravadas nos arquivos de configuração.');
+  if (process.env.GODMODE_MCP_AUTOSTART === 'false') {
+    console.log('[GODMODE CORE] Inicialização automática de MCP desativada por GODMODE_MCP_AUTOSTART=false.');
+  } else {
+    console.log('[GODMODE CORE] Inicializando servidores MCP marcados para autoStart...');
+    mcpStartupPromise = mcpRegistry.connectAutoStart();
+    void mcpStartupPromise.then(results => {
+      mcpStartupResults = results;
+      const connected = results.filter(item => item.ok).length;
+      const failed = results.length - connected;
+      console.log(`[GODMODE CORE] MCP autostart concluído: ${connected} conectado(s), ${failed} falha(s).`);
+    }).catch(error => console.error('[GODMODE CORE] Falha no autostart MCP:', error));
+  }
 });
 
 async function shutdown() {
+  await mcpStartupPromise.catch(() => undefined);
   await mcpRegistry.disconnectAll();
   server.close(() => process.exit(0));
 }

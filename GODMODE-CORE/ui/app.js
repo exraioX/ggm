@@ -321,15 +321,27 @@ async function loadMcp() {
 }
 function renderServers() {
   const host = $('#mcp-server-list'); if (!host) return;
-  host.innerHTML = servers.map(server => `
-    <article class="mcp-card">
-      <div class="mcp-card-head"><div><div class="mcp-name">${escapeHtml(server.name)}</div><div class="mcp-subline">${escapeHtml(server.transport || (server.command ? 'stdio' : 'HTTP'))} · ${server.command ? escapeHtml(server.command) : escapeHtml(server.url || '')}</div>${server.args?.length ? `<div class="mcp-subline">Argumentos: ${escapeHtml(server.args.join(' '))}</div>` : ''}${server.cwd ? `<div class="mcp-subline">Pasta: ${escapeHtml(server.cwd)}</div>` : ''}</div><span class="status-pill ${server.connected ? '' : 'off'}">${server.connected ? 'Conectado' : server.enabled === false ? 'Desativado' : 'Desconectado'}</span></div>
-      <div class="mcp-description">${escapeHtml(server.description || 'Servidor MCP configurado pelo usuário.')}</div>
-      <div class="mcp-subline">${server.connected ? `${server.tools} ferramenta(s) disponíveis` : (server.error ? escapeHtml(server.error) : 'A conexão só inicia quando você solicitar.')}</div>
-      <div class="card-actions">${server.connected ? `<button class="button secondary small" data-disconnect-mcp="${escapeHtml(server.name)}">Desconectar</button>` : `<button class="button primary small" data-connect-mcp="${escapeHtml(server.name)}" ${server.enabled === false ? 'disabled' : ''}>Conectar</button>`}<button class="button secondary small" data-remove-mcp="${escapeHtml(server.name)}">Remover</button></div>
-    </article>`).join('') || '<div class="empty-inline">Nenhum servidor configurado. Importe um JSON do Claude Desktop ou de outro cliente MCP.</div>';
-  $$('[data-connect-mcp]', host).forEach(button => button.addEventListener('click', () => connectMcp(button.dataset.connectMcp)));
-  $$('[data-disconnect-mcp]', host).forEach(button => button.addEventListener('click', () => disconnectMcp(button.dataset.disconnectMcp)));
+  host.innerHTML = servers.map(server => {
+    const statusText = server.connected ? 'Conectado'
+      : server.status === 'connecting' ? 'Iniciando automaticamente'
+        : server.status === 'error' ? 'Falha na inicialização'
+          : server.enabled === false ? 'Desativado'
+            : server.autoStart ? 'Aguardando inicialização'
+              : 'Disponível sob demanda pela IA';
+    const detail = server.connected
+      ? `${server.tools} ferramenta(s) · ${server.resources} recurso(s) · ${server.prompts} prompt(s)`
+      : server.error ? escapeHtml(server.error)
+        : server.autoStart ? 'O GODMODE inicia este servidor automaticamente.'
+          : 'A IA pode solicitar a inicialização; será necessária aprovação.';
+    return `
+      <article class="mcp-card">
+        <div class="mcp-card-head"><div><div class="mcp-name">${escapeHtml(server.name)}</div><div class="mcp-subline">${escapeHtml(server.transport || (server.command ? 'stdio' : 'HTTP'))} · ${server.command ? escapeHtml(server.command) : escapeHtml(server.url || '')}</div>${server.args?.length ? `<div class="mcp-subline">Argumentos: ${escapeHtml(server.args.join(' '))}</div>` : ''}${server.cwd ? `<div class="mcp-subline">Pasta: ${escapeHtml(server.cwd)}</div>` : ''}</div><span class="status-pill ${server.connected ? '' : 'off'}">${statusText}</span></div>
+        <div class="mcp-description">${escapeHtml(server.description || 'Servidor MCP configurado pelo usuário.')}</div>
+        <div class="mcp-subline">${detail}</div>
+        <div class="mcp-subline">${server.autoStart ? 'Inicialização automática habilitada' : 'Inicialização sob demanda'}</div>
+        <div class="card-actions"><button class="button secondary small" data-remove-mcp="${escapeHtml(server.name)}">Remover configuração</button></div>
+      </article>`;
+  }).join('') || '<div class="empty-inline">Nenhum servidor MCP configurado. O GODMODE oferece servidores essenciais por padrão.</div>';
   $$('[data-remove-mcp]', host).forEach(button => button.addEventListener('click', () => removeMcp(button.dataset.removeMcp)));
 }
 function renderTools() {
@@ -383,24 +395,18 @@ async function importMcp() {
   if (!text) { toast('Cole a configuração JSON antes de importar.', true); return; }
   let config;
   try { config = JSON.parse(text); } catch (error) { toast(`JSON inválido: ${error.message}`, true); return; }
+  const serverDefinitions = config?.mcpServers || config?.servers || {};
+  const lazyNames = new Set(['playwright', 'crawl4ai', 'owasp-zap', 'ghidra', 'trivy', 'grype', 'nmap', 'nuclei', 'amass']);
+  const launchCount = Object.entries(serverDefinitions).filter(([name, item]) => item && item.enabled !== false && item.disabled !== true && item.autoStart !== false && !lazyNames.has(name.toLowerCase()) && !['heavy', 'on-demand', 'on_demand', 'lazy'].includes(String(item.resource_profile || item.resourceProfile || item.startup || item.startupMode || '').toLowerCase())).length;
+  if (!confirm(`A importação pode iniciar ${launchCount} processo(s) local(is). Servidores pesados ou marcados autoStart:false ficam sob demanda. Importe somente configurações confiáveis. Continuar?`)) return;
   try {
     const result = await api('/api/mcp/import', { method: 'POST', body: JSON.stringify(config) });
     servers = result.servers || [];
     await loadMcp();
-    $('#mcp-import-feedback').textContent = `${result.imported} servidor(es) importado(s). Nenhum servidor foi iniciado automaticamente.`;
+    $('#mcp-import-feedback').textContent = `${result.imported} servidor(es) importado(s). Inicialização automática solicitada para os servidores habilitados.`;
     $('#mcp-import-feedback').classList.remove('error');
-    toast('Configuração MCP importada.');
+    toast('Configuração MCP importada; o GODMODE iniciou a conexão automaticamente.');
   } catch (error) { $('#mcp-import-feedback').textContent = error.message; $('#mcp-import-feedback').classList.add('error'); toast(error.message, true); }
-}
-async function connectMcp(name) {
-  const server = servers.find(item => item.name === name);
-  if (server?.command && !confirm(`Isso iniciará um processo local:\n\n${server.command} ${(server.args || []).join(' ')}\n\nRevise o comando e os argumentos antes de continuar. Deseja conectar?`)) return;
-  try { const result = await api(`/api/mcp/servers/${encodeURIComponent(name)}/connect`, { method: 'POST', body: '{}' }); servers = result.servers || []; await loadMcp(); toast(`Servidor ${name} conectado.`); }
-  catch (error) { await loadMcp(); toast(error.message, true); }
-}
-async function disconnectMcp(name) {
-  try { const result = await api(`/api/mcp/servers/${encodeURIComponent(name)}/disconnect`, { method: 'POST', body: '{}' }); servers = result.servers || []; await loadMcp(); toast(`Servidor ${name} desconectado.`); }
-  catch (error) { toast(error.message, true); }
 }
 async function removeMcp(name) {
   if (!confirm(`Remover a configuração MCP "${name}"?`)) return;
@@ -462,12 +468,6 @@ $('#mcp-file').addEventListener('change', async event => {
   $('#mcp-config').value = await file.text();
   event.target.value = '';
 });
-$('#connect-all-mcp').addEventListener('click', async () => {
-  const stdioCount = servers.filter(item => item.command && item.enabled !== false && !item.connected).length;
-  if (!confirm(`Conectar todos os servidores MCP habilitados?\n\nIsso pode iniciar ${stdioCount} processo(s) local(is) por stdio. Conecte apenas configurações confiáveis.`)) return;
-  try { const result = await api('/api/mcp/servers/connect-all', { method: 'POST', body: '{}' }); await loadMcp(); const failed = result.results.filter(item => !item.ok); toast(failed.length ? `${failed.length} servidor(es) não conectaram.` : 'Todos os servidores habilitados conectaram.'); }
-  catch (error) { toast(error.message, true); }
-});
 $('#memory-form').addEventListener('submit', saveMemory);
 $('#refresh-system').addEventListener('click', refreshSystem);
 $('#copy-endpoint').addEventListener('click', async () => { try { await navigator.clipboard.writeText(`${location.origin}/v1`); toast('Endpoint copiado.'); } catch { toast('Não foi possível copiar o endpoint.', true); } });
@@ -478,5 +478,6 @@ async function init() {
   try { await Promise.all([loadProviders(), loadMcp(), loadMemories(), refreshSystem(), refreshHealth()]); }
   catch (error) { toast(error.message, true); }
   window.setInterval(refreshHealth, 15000);
+  window.setInterval(loadMcp, 8000);
 }
 init();
