@@ -489,7 +489,7 @@ app.post('/api/mcp/marketplace/toggle/:name', async (req, res) => {
 });
 
 // Multi-Agent System (Specialists & Workflow)
-async function executeQueuedTask(taskId: string, providerId?: string) {
+async function executeQueuedTask(taskId: string, providerId?: string, model?: string) {
   const task = taskQueue.get(taskId);
   if (!task) throw new Error('Tarefa não encontrada.');
   if (task.status === 'running') throw new Error('Esta tarefa já está em execução.');
@@ -508,6 +508,7 @@ async function executeQueuedTask(taskId: string, providerId?: string) {
     const result = await multiAgentOrchestrator.runWorkflow(task.instruction, {
       role,
       providerId,
+      model,
       projectName: project.name,
       onStepUpdate: (step, stepIndex, totalSteps, workflowId) => {
         monitor.emit({
@@ -564,10 +565,11 @@ app.post('/api/agents/workflow/run', async (req, res) => {
 
   const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : projectManager.getActive().id;
   const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : undefined;
+  const model = typeof req.body?.model === 'string' ? req.body.model.trim().slice(0, 200) : undefined;
   const queued = taskQueue.add(instruction, agentRole, projectId);
 
   try {
-    const execution = await executeQueuedTask(queued.id, providerId);
+    const execution = await executeQueuedTask(queued.id, providerId, model);
     res.status(execution.result.success ? 200 : 502).json({
       ok: execution.result.success,
       task: execution.task,
@@ -1093,8 +1095,9 @@ app.post('/api/tasks', requireLocalApp, (req, res) => {
 app.post('/api/tasks/:id/run', requireLocalApp, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : undefined;
+  const model = typeof req.body?.model === 'string' ? req.body.model.trim().slice(0, 200) : undefined;
   try {
-    const execution = await executeQueuedTask(id, providerId);
+    const execution = await executeQueuedTask(id, providerId, model);
     res.status(execution.result.success ? 200 : 502).json({ ok: execution.result.success, ...execution });
   } catch (error) {
     res.status(502).json({ ok: false, task: taskQueue.get(id), error: error instanceof Error ? error.message : String(error) });
@@ -1104,12 +1107,13 @@ app.post('/api/tasks/:id/run', requireLocalApp, async (req, res) => {
 app.post('/api/tasks/run', requireLocalApp, async (req, res) => {
   const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : projectManager.getActive().id;
   const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : undefined;
+  const model = typeof req.body?.model === 'string' ? req.body.model.trim().slice(0, 200) : undefined;
   const pending = taskQueue.list(projectId).filter(task => task.status === 'pending');
   const results: Array<{ task: ReturnType<typeof taskQueue.get>; result?: unknown; error?: string }> = [];
 
   for (const task of pending) {
     try {
-      results.push(await executeQueuedTask(task.id, providerId));
+      results.push(await executeQueuedTask(task.id, providerId, model));
     } catch (error) {
       results.push({ task: taskQueue.get(task.id), error: error instanceof Error ? error.message : String(error) });
     }
