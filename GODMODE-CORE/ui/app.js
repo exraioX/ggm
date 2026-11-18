@@ -1767,10 +1767,18 @@ function initMonitorIfNeeded() {
 }
 
 function appendMonitorEvent(event) {
+  if (event?.type === 'monitor_cleared') {
+    monitorEvents = [];
+    renderMonitorFeed();
+    renderMonitorStats();
+    renderAgentTerminal();
+    return;
+  }
   monitorEvents.push(event);
   if (monitorEvents.length > 200) monitorEvents.shift();
   renderMonitorFeed();
   renderMonitorStats();
+  renderAgentTerminal();
 }
 
 async function clearMonitorHistory() {
