@@ -145,3 +145,19 @@ O GODMODE CORE mantém suas próprias conversas, provedores, servidores MCP e me
 - Sandbox forte de processos MCP.
 
 Esses itens ficam explícitos para não confundir configuração ou descoberta de ferramentas com integração funcional já validada.
+
+## Interface Workbench (IDE)
+
+A interface do Core usa um layout de IDE inspirado no fluxo de trabalho do VS Code e do Antigravity: barra de atividades, painel Explorer, abas de arquivos, editor local, chat do agente, monitor e áreas de ferramentas. O tema é integrado à interface original do Core, sem substituir a API, os provedores, as integrações MCP ou o sistema de aprovações.
+
+### Atalhos
+
+| Atalho | Ação |
+|---|---|
+| `Ctrl/Cmd + Shift + P` | Abrir a paleta de comandos |
+| `Ctrl/Cmd + 1` | Ir para o Chat do Agente |
+| `Ctrl/Cmd + 2` | Ir para Arquivos e Editor |
+| `Ctrl/Cmd + S` | Salvar o arquivo ativo no editor |
+
+O editor mantém várias abas abertas, sinaliza alterações não salvas, permite alternar e fechar abas, exibe numeração de linhas e posição do cursor e oferece filtro da árvore de arquivos. Ao trocar de projeto, alterações pendentes são confirmadas antes de fechar o workspace atual. O salvamento continua passando pela API local e pelo mecanismo de checkpoint do Core.
+
