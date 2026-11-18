@@ -91,28 +91,35 @@ export class ProviderRegistry {
     const client = this.client(id);
     let modelIds: string[] = [];
 
+    let openAiListError: unknown;
     try {
       const response = await client.models.list();
       modelIds = response.data.map(model => model.id).filter(Boolean);
     } catch (error) {
-      // O endpoint OpenAI-compatible do Ollama pode não expor /v1/models em algumas versões.
-      // A API nativa /api/tags é consultada somente quando o endpoint é loopback.
+      openAiListError = error;
+    }
+
+    // O endpoint OpenAI-compatible do Ollama pode não expor /v1/models
+    // (ou devolver uma lista vazia). Consultar /api/tags somente em loopback.
+    if (!modelIds.length) {
       const endpoint = new URL(provider.baseUrl);
       const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(endpoint.hostname);
-      if (!isLoopback) throw error;
-
-      endpoint.pathname = '/api/tags';
-      endpoint.search = '';
-      endpoint.hash = '';
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      try {
-        const response = await fetch(endpoint, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Ollama respondeu HTTP ${response.status} ao listar modelos.`);
-        const payload = await response.json() as { models?: Array<{ name?: string; model?: string }> };
-        modelIds = (payload.models || []).map(model => model.name || model.model || '').filter(Boolean);
-      } finally {
-        clearTimeout(timer);
+      if (!isLoopback) {
+        if (openAiListError) throw openAiListError;
+      } else {
+        endpoint.pathname = '/api/tags';
+        endpoint.search = '';
+        endpoint.hash = '';
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(endpoint, { signal: controller.signal });
+          if (!response.ok) throw new Error(`Ollama respondeu HTTP ${response.status} ao listar modelos.`);
+          const payload = await response.json() as { models?: Array<{ name?: string; model?: string }> };
+          modelIds = (payload.models || []).map(model => model.name || model.model || '').filter(Boolean);
+        } finally {
+          clearTimeout(timer);
+        }
       }
     }
 
