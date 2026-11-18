@@ -1806,7 +1806,7 @@ function renderWorkspaceLog() {
 // Wire up UI Events
 // ============================================================
 
-$$('.nav-item').forEach(button => button.addEventListener('click', () => setView(button.dataset.view)));
+$('[data-view]').forEach(button => button.addEventListener('click', () => setView(button.dataset.view)));
 
 document.addEventListener('click', event => {
   if (event.target && event.target.id === 'monitor-clear') {
