@@ -398,16 +398,16 @@
           <div><h2>Painel de Execução</h2><p>Autonomia, eventos em tempo real e saída do terminal em uma única visão operacional.</p></div>
           <div class="execution-header-actions">
             <span id="monitor-status" class="status-dot" title="Conexão do monitor"></span>
-            <span id="agent-trust-badge" class="status-pill">Modo: Cauteloso</span>
             <button id="monitor-clear" class="button secondary small">Limpar eventos</button>
           </div>
         </div>
-        <section class="panel autonomy-panel">
-          <div class="panel-heading"><div><h3>Nível de autonomia</h3><p>Controla a preferência local de aprovação na interface do agente.</p></div></div>
-          <div class="trust-options">
-            <label class="trust-option"><input type="radio" name="trust-level" value="cautious" checked><span class="trust-label trust-cautious">Cauteloso</span><small>Toda alteração pede aprovação explícita</small></label>
-            <label class="trust-option"><input type="radio" name="trust-level" value="assisted"><span class="trust-label trust-assisted">Assistido</span><small>Leitura livre; escrita pede confirmação</small></label>
-            <label class="trust-option"><input type="radio" name="trust-level" value="autonomous"><span class="trust-label trust-autonomous">Autônomo</span><small>O agente ainda respeita as proteções do núcleo</small></label>
+        <section class="panel safety-posture-panel">
+          <div class="panel-heading"><div><h3>Proteções aplicadas pelo núcleo</h3><p>As regras são validadas no backend; nenhum seletor visual desativa essas barreiras.</p></div><span class="status-pill status-connected">ATIVAS</span></div>
+          <div class="safety-posture-grid">
+            <div><strong>Loopback local</strong><small>Servidor limitado a 127.0.0.1</small></div>
+            <div><strong>Aprovação individual</strong><small>Operações mutáveis e de risco exigem confirmação</small></div>
+            <div><strong>Checkpoints</strong><small>Snapshot antes das edições protegidas</small></div>
+            <div><strong>Limite de workspace</strong><small>Caminhos externos exigem aprovação adicional</small></div>
           </div>
         </section>
         <div class="execution-grid">
@@ -417,7 +417,7 @@
             <div id="monitor-feed" class="monitor-feed"><div class="empty-inline">Aguardando eventos do agente…</div></div>
           </section>
           <section class="panel execution-terminal">
-            <div class="panel-heading"><div><h3>Terminal do agente</h3><p>Saída dos comandos executados no workspace ativo.</p></div><button id="clear-workspace-log" class="button secondary small" type="button">Limpar saída</button></div>
+            <div class="panel-heading"><div><h3>Terminal do agente</h3><p>Saída dos comandos executados no workspace ativo. Limpe o histórico pela ação única do painel.</p></div></div>
             <div id="agent-terminal-output">$ Aguardando comandos do agente...</div>
           </section>
         </div>
