@@ -890,6 +890,23 @@ function closeEditorTab(relPath) {
   }
 }
 
+function resetEditorWorkspace() {
+  openEditorTabs = [];
+  currentOpenFile = null;
+  currentFileContent = '';
+  const textarea = $('#file-editor-textarea');
+  if (textarea) { textarea.value = ''; textarea.disabled = true; }
+  setEditorFileHeader(null);
+  renderEditorTabs();
+  updateEditorGutter();
+}
+
+function confirmEditorWorkspaceSwitch() {
+  const dirty = openEditorTabs.filter(tab => tab.dirty);
+  if (!dirty.length) return true;
+  return confirm('Há ' + dirty.length + ' arquivo(s) com alterações não salvas. Trocar de projeto vai fechar essas abas. Deseja continuar?');
+}
+
 function filterFileTree(query) {
   const host = $('#file-tree-container');
   if (!host) return;
@@ -1322,30 +1339,36 @@ async function loadProjects() {
 
 function renderProjectSelector() {
   const sel = $('#project-selector');
-  if (!sel) return;
-  sel.innerHTML = projects.map(p => `
-    <option value="${escapeHtml(p.id)}" ${p.id === activeProjectId ? 'selected' : ''}>
-      ${escapeHtml(p.name)}
-    </option>
-  `).join('');
+  if (sel) {
+    sel.innerHTML = projects.map(p => `
+      <option value="${escapeHtml(p.id)}" ${p.id === activeProjectId ? 'selected' : ''}>
+        ${escapeHtml(p.name)}
+      </option>
+    `).join('');
+  }
+  const statusProject = $('#statusbar-project');
+  if (statusProject) statusProject.textContent = projects.find(p => p.id === activeProjectId)?.name || 'Workspace local';
 }
 
 async function selectProject(id) {
   if (!id || id === activeProjectId) return;
+  if (!confirmEditorWorkspaceSwitch()) { renderProjectSelector(); return; }
   try {
+    const previousProjectId = activeProjectId;
     const data = await api(`/api/projects/${encodeURIComponent(id)}/activate`, { method: 'POST' });
     projects = data.projects || [];
     activeProjectId = data.activeId || id;
+    if (activeProjectId !== previousProjectId) resetEditorWorkspace();
     renderProjectSelector();
     renderProjects();
     await Promise.all([refreshSystem(), refreshHealth(), loadMemories(), loadFileTree()]);
     toast(`Projeto ativo alterado para: ${projects.find(p => p.id === activeProjectId)?.name || id}`);
-    // Background auto-indexing
     toast('🔍 Indexando símbolos do projeto em background…');
     api('/api/projects/index', { method: 'POST', body: JSON.stringify({ projectId: id }) })
       .then(r => toast(`📊 Índice atualizado: ${r.symbolCount || 0} símbolo(s) encontrado(s).`))
       .catch(() => {});
   } catch (error) {
+    renderProjectSelector();
     toast(error.message, true);
   }
 }
@@ -1359,13 +1382,16 @@ async function submitProject(event) {
     toast('Preencha o nome e caminho da pasta.', true);
     return;
   }
+  if (!confirmEditorWorkspaceSwitch()) return;
   try {
+    const previousProjectId = activeProjectId;
     const res = await api('/api/projects', {
       method: 'POST',
       body: JSON.stringify({ name, path: pathVal, description: desc }),
     });
     projects = res.projects || [];
     activeProjectId = res.activeId || activeProjectId;
+    if (activeProjectId !== previousProjectId) resetEditorWorkspace();
     $('#project-form')?.reset();
     renderProjectSelector();
     renderProjects();
@@ -1379,10 +1405,13 @@ async function submitProject(event) {
 async function deleteProject(id) {
   const proj = projects.find(p => p.id === id);
   if (!confirm(`Excluir o projeto "${proj?.name || id}"? Os arquivos no disco NÃO serão apagados.`)) return;
+  if (id === activeProjectId && !confirmEditorWorkspaceSwitch()) return;
   try {
+    const previousProjectId = activeProjectId;
     const res = await api(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
     projects = res.projects || [];
     activeProjectId = res.activeId || projects[0]?.id || '';
+    if (activeProjectId !== previousProjectId) resetEditorWorkspace();
     renderProjectSelector();
     renderProjects();
     await loadFileTree();
