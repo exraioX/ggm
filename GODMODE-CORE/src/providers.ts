@@ -86,9 +86,37 @@ export class ProviderRegistry {
   }
 
   async models(id: string) {
+    const provider = this.get(id);
+    if (!provider) throw new Error('Provedor não encontrado.');
     const client = this.client(id);
-    const response = await client.models.list();
-    return response.data.map(model => model.id).sort((a, b) => a.localeCompare(b));
+    let modelIds: string[] = [];
+
+    try {
+      const response = await client.models.list();
+      modelIds = response.data.map(model => model.id).filter(Boolean);
+    } catch (error) {
+      // O endpoint OpenAI-compatible do Ollama pode não expor /v1/models em algumas versões.
+      // A API nativa /api/tags é consultada somente quando o endpoint é loopback.
+      const endpoint = new URL(provider.baseUrl);
+      const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(endpoint.hostname);
+      if (!isLoopback) throw error;
+
+      endpoint.pathname = '/api/tags';
+      endpoint.search = '';
+      endpoint.hash = '';
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        const response = await fetch(endpoint, { signal: controller.signal });
+        if (!response.ok) throw new Error(`Ollama respondeu HTTP ${response.status} ao listar modelos.`);
+        const payload = await response.json() as { models?: Array<{ name?: string; model?: string }> };
+        modelIds = (payload.models || []).map(model => model.name || model.model || '').filter(Boolean);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    return [...new Set(modelIds)].sort((a, b) => a.localeCompare(b));
   }
 }
 
