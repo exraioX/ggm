@@ -29,11 +29,23 @@ export interface WorkflowStep {
   durationMs?: number;
 }
 
+export interface WorkflowOptions {
+  role?: SpecialistRole | 'auto';
+  providerId?: string;
+  projectName?: string;
+  onStepUpdate?: (step: WorkflowStep, index: number, total: number, workflowId: string) => void;
+}
+
 export interface WorkflowResult {
   workflowId: string;
   task: string;
+  providerId: string;
+  executionMode: 'sequential-llm-specialists';
   steps: WorkflowStep[];
   finalSynthesis: string;
+  completedSteps: number;
+  failedSteps: number;
+  success: boolean;
   totalDurationMs: number;
 }
 
@@ -215,63 +227,100 @@ export class MultiAgentOrchestrator {
    */
   async runWorkflow(
     task: string,
-    onStepUpdate?: (step: WorkflowStep) => void,
+    options: WorkflowOptions = {},
   ): Promise<WorkflowResult> {
+    const normalizedTask = task.trim();
+    if (!normalizedTask) throw new Error('Informe uma tarefa para o workflow.');
+
+    const enabledProviders = providerRegistry.list().filter(provider => provider.enabled !== false && provider.model.trim());
+    const provider = options.providerId
+      ? enabledProviders.find(item => item.id === options.providerId)
+      : enabledProviders[0];
+
+    if (!provider) {
+      throw new Error(options.providerId
+        ? 'O provedor selecionado não está ativo ou não possui um modelo configurado.'
+        : 'Nenhum provedor de IA ativo. Configure um provedor antes de executar o workflow.');
+    }
+
+    const role = options.role || 'auto';
+    const steps: WorkflowStep[] = role !== 'auto' && role !== 'orchestrator'
+      ? [{
+          id: randomUUID(),
+          specialist: role,
+          instruction: normalizedTask,
+          status: 'pending',
+        }]
+      : this.planWorkflow(normalizedTask);
+
     const workflowId = randomUUID();
     const startTime = Date.now();
-    const steps = this.planWorkflow(task);
+    let accumulatedContext = [
+      `Tarefa principal: ${normalizedTask}`,
+      options.projectName ? `Projeto ativo: ${options.projectName}` : '',
+      'Modo de execução: especialistas sequenciais usando o mesmo provedor de IA. Esta modalidade não executa ferramentas nativas/MCP diretamente.',
+      '',
+    ].filter(Boolean).join('\n');
 
-    let accumulatedContext = `Tarefa Principal: ${task}\n\n`;
+    const client = providerRegistry.client(provider.id);
 
-    for (const step of steps) {
+    for (const [index, step] of steps.entries()) {
       step.status = 'running';
-      onStepUpdate?.(step);
+      options.onStepUpdate?.(step, index, steps.length, workflowId);
 
       const specialist = this.getSpecialist(step.specialist);
       const stepStart = Date.now();
-
-      // Monta prompt do especialista com contexto acumulado
-      const prompt = `Contexto acumulado até o momento:\n${accumulatedContext}\n\nSua missão como ${specialist.name} (${specialist.title}):\n${step.instruction}`;
+      const prompt = [
+        `Projeto: ${options.projectName || 'não especificado'}`,
+        `Contexto acumulado:\n${accumulatedContext}`,
+        `Missão como ${specialist.name} (${specialist.title}):\n${step.instruction}`,
+        'Entregue conclusões concretas, explicite incertezas e não alegue ter executado ferramentas, testes ou alterações que não foram realmente executados.',
+      ].join('\n\n');
 
       try {
-        const enabledProviders = providerRegistry.list().filter(p => p.enabled !== false && p.model.trim());
-        if (enabledProviders.length > 0) {
-          const provider = enabledProviders[0];
-          const client = providerRegistry.client(provider.id);
-          const response = await client.chat.completions.create({
-            model: provider.model,
-            messages: [
-              { role: 'system', content: specialist.systemPrompt },
-              { role: 'user', content: prompt },
-            ],
-            max_tokens: 1500,
-          });
+        const response = await client.chat.completions.create({
+          model: provider.model,
+          messages: [
+            { role: 'system', content: specialist.systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 1800,
+        });
 
-          step.output = response.choices[0]?.message?.content || '[Sem resposta do modelo]';
-        } else {
-          step.output = `[Plano de execução simulado para o especialista ${specialist.name}: etapa concluída com sucesso com base nas diretrizes de ${specialist.role}]`;
+        const output = response.choices[0]?.message?.content;
+        if (typeof output !== 'string' || !output.trim()) {
+          throw new Error('O provedor retornou uma resposta vazia.');
         }
 
+        step.output = output.trim();
         step.status = 'completed';
-        step.durationMs = Date.now() - stepStart;
-        accumulatedContext += `### Contribuição de ${specialist.name}:\n${step.output}\n\n`;
+        accumulatedContext += `\n### ${specialist.name}\n${step.output}\n`;
       } catch (error) {
         step.status = 'failed';
-        step.output = `Erro na execução do especialista: ${error instanceof Error ? error.message : String(error)}`;
+        step.output = `Falha na etapa: ${error instanceof Error ? error.message : String(error)}`;
+        accumulatedContext += `\n### ${specialist.name} — falhou\n${step.output}\n`;
+      } finally {
         step.durationMs = Date.now() - stepStart;
+        options.onStepUpdate?.(step, index, steps.length, workflowId);
       }
-
-      onStepUpdate?.(step);
     }
 
-    const finalStep = steps.find(s => s.specialist === 'orchestrator' && s.status === 'completed');
-    const finalSynthesis = finalStep?.output || accumulatedContext;
+    const completedSteps = steps.filter(step => step.status === 'completed').length;
+    const failedSteps = steps.filter(step => step.status === 'failed').length;
+    const finalStep = [...steps].reverse().find(step => step.specialist === 'orchestrator' && step.status === 'completed');
+    const finalSynthesis = finalStep?.output
+      || (steps.length === 1 ? steps[0].output || '' : accumulatedContext.trim());
 
     return {
       workflowId,
-      task,
+      task: normalizedTask,
+      providerId: provider.id,
+      executionMode: 'sequential-llm-specialists',
       steps,
       finalSynthesis,
+      completedSteps,
+      failedSteps,
+      success: failedSteps === 0 && completedSteps === steps.length,
       totalDurationMs: Date.now() - startTime,
     };
   }
