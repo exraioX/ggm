@@ -1004,9 +1004,9 @@ async function loadSpecialists() {
           </div>
           <div class="mcp-description" style="margin-top:8px;">${escapeHtml(agent.description)}</div>
           <div style="margin-top:10px;">
-            <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:4px;">Ferramentas Autorizadas:</div>
+            <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:4px;">Ferramentas recomendadas (não executadas pelo perfil):</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;">
-              ${agent.allowedTools.map(t => `<span class="badge" style="font-size:10px;background:rgba(0,229,255,0.08);color:var(--accent);border:1px solid rgba(0,229,255,0.2);">${escapeHtml(t)}</span>`).join('')}
+              ${(agent.recommendedTools || []).map(t => `<span class="badge" style="font-size:10px;background:rgba(0,229,255,0.08);color:var(--accent);border:1px solid rgba(0,229,255,0.2);">${escapeHtml(t)}</span>`).join('')}
             </div>
           </div>
         </article>
@@ -1017,71 +1017,182 @@ async function loadSpecialists() {
   }
 }
 
+function renderWorkflowResult(result) {
+  const progress = $('#workflow-progress');
+  const stepsHost = $('#workflow-steps-list');
+  const synthesis = $('#workflow-synthesis');
+  const synthesisContent = $('#workflow-synthesis-content');
+  const summary = $('#workflow-progress-summary');
+  const steps = Array.isArray(result?.steps) ? result.steps : [];
+
+  if (progress) progress.hidden = false;
+  if (stepsHost) {
+    const labels = { pending:'Aguardando', running:'Executando', completed:'Concluído', failed:'Falhou' };
+    stepsHost.innerHTML = steps.map((step, index) => {
+      const status = step.status || 'pending';
+      const safeRole = escapeHtml(step.specialist || 'especialista');
+      const output = step.output ? '<div class="workflow-step-output">' + escapeHtml(step.output.slice(0, 1200)) + '</div>' : '';
+      const duration = typeof step.durationMs === 'number' ? '<small>' + step.durationMs + ' ms</small>' : '';
+      return '<article class="workflow-step-item status-' + escapeHtml(status) + '">' +
+        '<span class="step-num">' + String(index + 1).padStart(2, '0') + '</span>' +
+        '<div class="step-info"><div class="step-agent"><strong>' + safeRole + '</strong> ' + duration + '</div>' +
+        '<div class="step-inst">' + escapeHtml(step.instruction || '') + '</div>' + output + '</div>' +
+        '<span class="step-status status-pill ' + (status === 'failed' ? 'off' : '') + '">' + (labels[status] || status) + '</span>' +
+      '</article>';
+    }).join('') || '<div class="empty-inline">O workflow não retornou etapas.</div>';
+  }
+  if (summary) {
+    const completed = result?.completedSteps ?? steps.filter(step => step.status === 'completed').length;
+    const failed = result?.failedSteps ?? steps.filter(step => step.status === 'failed').length;
+    summary.textContent = failed ? completed + '/' + steps.length + ' concluídas · ' + failed + ' falhas' : completed + '/' + steps.length + ' concluídas';
+    summary.classList.toggle('risk-high', failed > 0);
+  }
+  if (synthesis && synthesisContent) {
+    synthesis.hidden = false;
+    synthesisContent.textContent = result?.finalSynthesis || 'Sem síntese retornada pelo provedor.';
+  }
+}
+
 async function runMultiAgentWorkflow(event) {
   event?.preventDefault();
-  const input = $('#workflow-task-input');
-  const task = input?.value?.trim();
+  const task = $('#workflow-task-input')?.value?.trim();
   if (!task) return;
 
   const submitBtn = $('#workflow-submit-btn');
-  const progressDiv = $('#workflow-progress');
-  const stepsList = $('#workflow-steps-list');
-  const synthesisDiv = $('#workflow-synthesis');
-  const synthesisContent = $('#workflow-synthesis-content');
-
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Orquestrando…';
-  progressDiv.hidden = false;
-  synthesisDiv.hidden = true;
+  const queueBtn = $('#queue-workflow-btn');
+  const progress = $('#workflow-progress');
+  const synthesis = $('#workflow-synthesis');
+  const summary = $('#workflow-progress-summary');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Executando…'; }
+  if (queueBtn) queueBtn.disabled = true;
+  if (progress) progress.hidden = false;
+  if (synthesis) synthesis.hidden = true;
+  if ($('#workflow-steps-list')) $('#workflow-steps-list').innerHTML = '<div class="empty-inline">Enviando missão ao orquestrador…</div>';
+  if (summary) summary.textContent = 'Em execução';
 
   try {
-    stepsList.innerHTML = '<div class="empty-inline">Orquestrador analisando a tarefa e planejando etapas…</div>';
-    const planRes = await api('/api/agents/workflow/plan', {
+    const response = await api('/api/agents/workflow/run', {
       method: 'POST',
-      body: JSON.stringify({ task })
+      body: JSON.stringify({
+        task,
+        agentRole: $('#workflow-agent-role')?.value || 'auto',
+        projectId: activeProjectId || undefined,
+        providerId: activeProviderId || undefined
+      })
     });
 
-    const steps = planRes.steps || [];
-    stepsList.innerHTML = steps.map((s, idx) => `
-      <div class="workflow-step-item" id="wf-step-${s.id}">
-        <span class="step-num">${s.id}</span>
-        <div class="step-info">
-          <div class="step-agent"><strong>Especialista:</strong> ${escapeHtml(s.agent)}</div>
-          <div class="step-inst">${escapeHtml(s.instruction)}</div>
-        </div>
-        <span class="step-status status-pill ${idx === 0 ? 'running' : 'off'}">${idx === 0 ? 'Executando' : 'Aguardando'}</span>
-      </div>
-    `).join('');
-
-    const runRes = await api('/api/agents/workflow/run', {
-      method: 'POST',
-      body: JSON.stringify({ task })
-    });
-
-    const results = runRes.result?.results || [];
-    results.forEach(r => {
-      const stepEl = $(`#wf-step-${r.stepId}`);
-      if (stepEl) {
-        const statusEl = stepEl.querySelector('.step-status');
-        if (statusEl) {
-          statusEl.textContent = 'Concluído';
-          statusEl.className = 'step-status status-pill';
-        }
-      }
-    });
-
-    synthesisDiv.hidden = false;
-    synthesisContent.textContent = runRes.result?.synthesis || 'Workflow concluído com sucesso.';
-    toast('Workflow multiagente concluído com sucesso!');
+    renderWorkflowResult(response.result);
+    await loadTaskQueue();
+    if ($('#workflow-task-input')) $('#workflow-task-input').value = '';
+    toast(response.result?.success ? 'Missão concluída e registrada na fila.' : 'Missão terminou com etapas que precisam de revisão.', !response.result?.success);
   } catch (error) {
-    toast(`Erro no workflow: ${error.message}`, true);
-    synthesisDiv.hidden = false;
-    synthesisContent.textContent = `Falha na execução: ${error.message}`;
+    const payload = error.payload || {};
+    if (payload.result) renderWorkflowResult(payload.result);
+    else {
+      if (synthesis) synthesis.hidden = false;
+      if ($('#workflow-synthesis-content')) $('#workflow-synthesis-content').textContent = error.message;
+      if (summary) summary.textContent = 'Falha na execução';
+    }
+    await loadTaskQueue();
+    toast('Erro no workflow: ' + error.message, true);
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Executar Workflow';
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Executar agora'; }
+    if (queueBtn) queueBtn.disabled = false;
   }
 }
+
+// ============================================================
+// Validação do projeto — usa o TestRunner real do backend
+// ============================================================
+
+async function loadTestRunnerConfig() {
+  if (!activeProjectId) return;
+  try {
+    const response = await api('/api/projects/' + encodeURIComponent(activeProjectId) + '/tests/config');
+    const config = response.config || {};
+    if ($('#test-command')) $('#test-command').value = config.testCommand || 'npm test';
+    if ($('#lint-command')) $('#lint-command').value = config.lintCommand || 'npm run lint';
+    if ($('#build-command')) $('#build-command').value = config.buildCommand || 'npm run typecheck';
+    if ($('#test-timeout')) $('#test-timeout').value = String(config.timeoutSeconds || 60);
+  } catch (error) {
+    toast('Não foi possível carregar a configuração de testes: ' + error.message, true);
+  }
+}
+
+async function saveTestRunnerConfig(event) {
+  event?.preventDefault();
+  if (!activeProjectId) { toast('Selecione um projeto antes de configurar os testes.', true); return; }
+  const config = {
+    testCommand: $('#test-command')?.value.trim() || '',
+    lintCommand: $('#lint-command')?.value.trim() || '',
+    buildCommand: $('#build-command')?.value.trim() || '',
+    timeoutSeconds: Math.max(5, Math.min(600, Number($('#test-timeout')?.value) || 60))
+  };
+  try {
+    await api('/api/projects/' + encodeURIComponent(activeProjectId) + '/tests/config', {
+      method:'POST',
+      body:JSON.stringify(config)
+    });
+    toast('Comandos de validação salvos para este projeto.');
+  } catch (error) { toast('Falha ao salvar os comandos: ' + error.message, true); }
+}
+
+function renderTestRunnerResult(result) {
+  const status = $('#test-runner-status');
+  const summary = $('#test-runner-summary');
+  const output = $('#test-runner-output');
+  if (status) {
+    status.textContent = result.success ? 'APROVADO' : result.timedOut ? 'TEMPO ESGOTADO' : 'FALHOU';
+    status.className = 'status-pill ' + (result.success ? 'status-connected' : 'off');
+  }
+  if (summary) {
+    summary.textContent = (result.suite || 'Execução') + ' · código ' + result.exitCode + ' · ' +
+      result.durationMs + ' ms · ' + (result.diagnostics?.length || 0) + ' diagnóstico(s)';
+  }
+  if (output) {
+    const diagnostics = Array.isArray(result.diagnostics) && result.diagnostics.length
+      ? '\n\nDIAGNÓSTICOS:\n' + result.diagnostics.join('\n')
+      : '';
+    output.textContent = (result.output || '(sem saída do processo)') + diagnostics;
+  }
+}
+
+async function runProjectSuite(suite, button) {
+  if (!activeProjectId) { toast('Cadastre ou selecione um projeto primeiro.', true); return; }
+  const control = button || document.querySelector('[data-run-suite="' + suite + '"]');
+  if (control) { control.disabled = true; control.textContent = 'Executando…'; }
+  const status = $('#test-runner-status');
+  if (status) { status.textContent = 'EXECUTANDO'; status.className = 'status-pill'; }
+  if ($('#test-runner-output')) $('#test-runner-output').textContent = '$ Iniciando ' + suite + '…';
+
+  try {
+    const response = await api('/api/projects/' + encodeURIComponent(activeProjectId) + '/tests/run', {
+      method:'POST',
+      body:JSON.stringify({ suite })
+    });
+    renderTestRunnerResult(response.result);
+    if (response.result.success) toast('Validação ' + suite + ' concluída.');
+    else toast('A validação ' + suite + ' encontrou falhas.', true);
+  } catch (error) {
+    const result = error.payload?.result;
+    if (result) renderTestRunnerResult(result);
+    else {
+      if (status) { status.textContent = 'ERRO'; status.className = 'status-pill off'; }
+      if ($('#test-runner-output')) $('#test-runner-output').textContent = error.message;
+      if ($('#test-runner-summary')) $('#test-runner-summary').textContent = 'Não foi possível executar a suíte.';
+    }
+    toast('Falha ao executar ' + suite + ': ' + error.message, true);
+  } finally {
+    if (control) {
+      control.disabled = false;
+      control.textContent = suite === 'test' ? '▶ Executar testes' : suite === 'build' ? 'Verificar tipos / build' : 'Executar lint';
+    }
+  }
+}
+
+// ============================================================
+// Claude Code Plugins & MCP Marketplace
+// ============================================================
 
 // ============================================================
 // Claude Code Plugins & MCP Marketplace
@@ -1740,72 +1851,108 @@ async function shouldUseOrchestrator(text) {
 
 async function loadTaskQueue() {
   try {
-    const res = await api(`/api/tasks${activeProjectId ? `?projectId=${encodeURIComponent(activeProjectId)}` : ''}`);
+    const res = await api('/api/tasks' + (activeProjectId ? '?projectId=' + encodeURIComponent(activeProjectId) : ''));
     taskQueueItems = res.tasks || [];
-    renderTaskQueue();
-  } catch (error) { toast(`Erro ao carregar fila: ${error.message}`, true); }
+    renderTaskQueue(res.stats);
+  } catch (error) { toast('Erro ao carregar fila: ' + error.message, true); }
 }
 
-function renderTaskQueue() {
+function renderTaskQueue(stats) {
   const host = $('#task-queue-list');
   if (!host) return;
   const countEl = $('#task-queue-count');
-  if (countEl) countEl.textContent = `${taskQueueItems.length} tarefa(s) na fila`;
+  if (countEl) countEl.textContent = (stats?.total ?? taskQueueItems.length) + ' tarefa(s) · ' + (stats?.pending ?? 0) + ' pendente(s)';
+
+  const statsHost = $('#task-queue-stats');
+  if (statsHost) {
+    const summary = stats || { pending:0, running:0, completed:0, failed:0 };
+    statsHost.innerHTML = [
+      ['Pendentes', summary.pending || 0],
+      ['Executando', summary.running || 0],
+      ['Concluídas', summary.completed || 0],
+      ['Falhas', summary.failed || 0]
+    ].map(item => '<div class="queue-stat"><strong>' + item[1] + '</strong><span>' + item[0] + '</span></div>').join('');
+  }
 
   if (!taskQueueItems.length) {
-    host.innerHTML = '<div class="empty-inline">Nenhuma tarefa na fila. Adicione instruções acima.</div>';
+    host.innerHTML = '<div class="empty-inline">Nenhuma tarefa na fila. Adicione uma missão acima.</div>';
     return;
   }
 
-  const statusIcons = { pending: '⏳', running: '⚡', completed: '✅', failed: '❌' };
-  const agentLabels = { auto: '🤖 Auto', coder: '💻 Coder', researcher: '🔍 Pesquisador', reviewer: '🛡 Revisor', tester: '🧪 Tester', architect: '🏛 Arquiteto' };
+  const statusLabels = { pending:'Pendente', running:'Executando', completed:'Concluída', failed:'Falhou' };
+  const roleLabels = { auto:'Orquestrador automático', orchestrator:'Orquestrador', coder:'Programador', researcher:'Pesquisador', reviewer:'Revisor', tester:'QA / Testador', architect:'Arquiteto', reverse_engineer:'Engenharia reversa' };
+  host.innerHTML = taskQueueItems.slice().reverse().map(task => {
+    const result = task.result ? '<details class="queue-result"><summary>Ver resultado</summary><pre>' + escapeHtml(task.result) + '</pre></details>' : '';
+    const error = task.error ? '<div class="queue-error">' + escapeHtml(task.error) + '</div>' : '';
+    const retry = task.status === 'failed' ? '<button class="button secondary small" data-retry-task="' + escapeHtml(task.id) + '">Tentar novamente</button>' : '';
+    const remove = task.status !== 'running' ? '<button class="button subtle-danger small" data-remove-task="' + escapeHtml(task.id) + '" title="Remover tarefa">×</button>' : '';
+    return '<article class="task-item" data-task-id="' + escapeHtml(task.id) + '">' +
+      '<span class="task-item-status task-status-' + escapeHtml(task.status) + '"></span>' +
+      '<div class="task-item-content"><div class="task-item-title">' + escapeHtml(task.instruction) + '</div>' +
+      '<div class="task-item-meta">' + escapeHtml(statusLabels[task.status] || task.status) + ' · ' + escapeHtml(roleLabels[task.agentRole] || task.agentRole) + ' · ' + new Date(task.createdAt).toLocaleString('pt-BR') + '</div>' +
+      error + result + '</div><div class="task-item-actions">' + retry + remove + '</div></article>';
+  }).join('');
 
-  host.innerHTML = taskQueueItems.map(task => `
-    <div class="task-item" data-task-id="${escapeHtml(task.id)}">
-      <div class="task-item-status task-status-${escapeHtml(task.status)}"></div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12.5px;font-weight:600;color:${task.status==='failed'?'var(--danger)':task.status==='completed'?'var(--good)':'var(--text)'};">${escapeHtml(task.instruction.slice(0, 100))}${task.instruction.length > 100 ? '…' : ''}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${statusIcons[task.status] || '⏳'} ${agentLabels[task.agentRole] || task.agentRole} · ${new Date(task.createdAt).toLocaleTimeString('pt-BR')}</div>
-        ${task.error ? `<div style="font-size:11px;color:var(--danger);margin-top:2px;">Erro: ${escapeHtml(task.error)}</div>` : ''}
-      </div>
-      ${task.status !== 'running' ? `<button class="button secondary small" data-remove-task="${escapeHtml(task.id)}">×</button>` : ''}
-    </div>
-  `).join('');
-
-  $$('[data-remove-task]', host).forEach(btn => {
-    btn.addEventListener('click', async () => {
-      await api(`/api/tasks/${encodeURIComponent(btn.dataset.removeTask)}`, { method: 'DELETE' });
+  $$('[data-remove-task]', host).forEach(button => button.addEventListener('click', async () => {
+    try {
+      await api('/api/tasks/' + encodeURIComponent(button.dataset.removeTask), { method:'DELETE' });
       await loadTaskQueue();
-    });
-  });
+    } catch (error) { toast(error.message, true); }
+  }));
+  $$('[data-retry-task]', host).forEach(button => button.addEventListener('click', async () => {
+    try {
+      await api('/api/tasks/' + encodeURIComponent(button.dataset.retryTask) + '/retry', { method:'POST', body:'{}' });
+      await loadTaskQueue();
+      toast('Tarefa reenfileirada.');
+    } catch (error) { toast(error.message, true); }
+  }));
 }
 
-async function addTask(event) {
-  event?.preventDefault();
-  const input = $('#task-queue-input');
-  const agentSelect = $('#task-agent-select');
-  const instruction = input?.value?.trim();
-  if (!instruction) return;
+async function queueWorkflowTask() {
+  const instruction = $('#workflow-task-input')?.value?.trim();
+  if (!instruction) { toast('Descreva a missão antes de adicioná-la.', true); return; }
+  const button = $('#queue-workflow-btn');
+  if (button) { button.disabled = true; button.textContent = 'Adicionando…'; }
   try {
     await api('/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
+      method:'POST',
+      body:JSON.stringify({
         instruction,
-        agentRole: agentSelect?.value || 'auto',
-        projectId: activeProjectId || undefined
+        agentRole:$('#workflow-agent-role')?.value || 'auto',
+        projectId:activeProjectId || undefined
       })
     });
-    input.value = '';
+    if ($('#workflow-task-input')) $('#workflow-task-input').value = '';
     await loadTaskQueue();
-    toast('Tarefa adicionada à fila.');
-  } catch (error) { toast(error.message, true); }
+    toast('Missão adicionada à fila.');
+  } catch (error) { toast('Não foi possível adicionar a missão: ' + error.message, true); }
+  finally { if (button) { button.disabled = false; button.textContent = 'Adicionar à fila'; } }
+}
+
+async function runTaskQueue() {
+  const button = $('#run-task-queue');
+  if (button) { button.disabled = true; button.textContent = 'Executando…'; }
+  try {
+    const response = await api('/api/tasks/run', {
+      method:'POST',
+      body:JSON.stringify({ projectId:activeProjectId || undefined, providerId:activeProviderId || undefined })
+    });
+    await loadTaskQueue();
+    const summary = response.stats || {};
+    toast('Fila processada: ' + (summary.completed || 0) + ' concluída(s), ' + (summary.failed || 0) + ' falha(s).', (summary.failed || 0) > 0);
+  } catch (error) {
+    await loadTaskQueue();
+    toast('Falha ao processar fila: ' + error.message, true);
+  } finally { if (button) { button.disabled = false; button.textContent = 'Executar pendentes'; } }
 }
 
 async function clearTaskQueue() {
-  if (!confirm('Limpar todas as tarefas da fila?')) return;
-  await api('/api/tasks/clear', { method: 'POST', body: JSON.stringify({ projectId: activeProjectId }) });
-  await loadTaskQueue();
-  toast('Fila limpa.');
+  if (!confirm('Remover todas as tarefas deste projeto, mantendo as tarefas globais e dos outros projetos?')) return;
+  try {
+    await api('/api/tasks/clear', { method:'POST', body:JSON.stringify({ projectId:activeProjectId || undefined }) });
+    await loadTaskQueue();
+    toast('Fila do projeto limpa.');
+  } catch (error) { toast(error.message, true); }
 }
 
 // ============================================================
