@@ -1740,6 +1740,7 @@ function initMonitorIfNeeded() {
     });
     renderMonitorFeed();
     renderMonitorStats();
+    renderAgentTerminal();
   }).catch(() => undefined);
 
   function connect() {
@@ -1770,6 +1771,26 @@ function appendMonitorEvent(event) {
   if (monitorEvents.length > 200) monitorEvents.shift();
   renderMonitorFeed();
   renderMonitorStats();
+}
+
+function renderAgentTerminal() {
+  const host = $('#agent-terminal-output');
+  if (!host) return;
+  const events = monitorEvents.filter(event => event.type === 'tool_result').slice(-35);
+  if (!events.length) {
+    host.textContent = '$ Aguardando comandos do agente...';
+    return;
+  }
+  host.textContent = events.map(event => {
+    const time = event.timestamp ? new Date(event.timestamp).toLocaleTimeString('pt-BR') : '--:--:--';
+    const status = event.isError ? 'ERRO' : 'OK';
+    const duration = typeof event.durationMs === 'number' ? ' · ' + event.durationMs + ' ms' : '';
+    const output = typeof event.output === 'string' && event.output.trim()
+      ? event.output.slice(0, 6000)
+      : '(sem saída capturada)';
+    return '[' + time + '] ' + status + ' · ' + (event.tool || 'ferramenta') + duration + '\\n' + output;
+  }).join('\\n\\n' + '─'.repeat(54) + '\\n\\n');
+  host.scrollTop = host.scrollHeight;
 }
 
 function renderMonitorFeed() {
@@ -2026,6 +2047,7 @@ function initWorkspace() {
   initMonitorIfNeeded();
   renderMonitorFeed();
   renderMonitorStats();
+  renderAgentTerminal();
 }
 
 // ============================================================
@@ -2039,6 +2061,7 @@ document.addEventListener('click', event => {
     monitorEvents = [];
     renderMonitorFeed();
     renderMonitorStats();
+    renderAgentTerminal();
   }
 });
 
@@ -2231,8 +2254,11 @@ $('#mcp-prompts-list')?.addEventListener('click', event => {
 
 $('#clear-workspace-log')?.addEventListener('click', () => {
   const terminal = $('#agent-terminal-output');
+  monitorEvents = [];
+  renderMonitorFeed();
+  renderMonitorStats();
   if (terminal) terminal.textContent = '$ Aguardando comandos do agente...';
-  toast('Saída do terminal limpa.');
+  toast('Histórico de execução limpo.');
 });
 
 async function init() {
