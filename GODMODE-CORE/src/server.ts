@@ -707,11 +707,12 @@ app.post('/api/chat', async (req, res) => {
     }
 
     const provider = providerRegistry.get(providerId);
-    if (!provider || (!chosenModel && !provider.model.trim())) {
+    const requestedModel = typeof req.body?.model === 'string' ? req.body.model.trim().slice(0, 200) : '';
+    if (!provider || (!requestedModel && !chosenModel && !provider.model.trim())) {
       res.status(400).json({ error: 'Selecione um provedor e configure o identificador do modelo.' });
       return;
     }
-    const modelToUse = chosenModel || provider.model;
+    const modelToUse = requestedModel || chosenModel || provider.model;
 
     // Injeta memórias persistentes e resumo do índice de código
     const selectedMemories = memoryManager.getRelevantContext(activeProject.id);
