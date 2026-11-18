@@ -718,59 +718,170 @@ function bindFileTreeEvents(container) {
   });
 }
 
-async function openFile(relPath) {
-  currentOpenFile = relPath;
-  $$('.file-item').forEach(el => el.classList.toggle('active', el.dataset.filePath === relPath));
-  $('#editor-active-file').textContent = relPath;
+function editorLanguage(path) {
+  const ext = String(path || '').split('.').pop().toLowerCase();
+  const languages = { ts:'TypeScript', tsx:'TypeScript React', js:'JavaScript', jsx:'JavaScript React', json:'JSON', html:'HTML', css:'CSS', scss:'SCSS', md:'Markdown', py:'Python', rs:'Rust', go:'Go', java:'Java', kt:'Kotlin', cs:'C#', sql:'SQL', yml:'YAML', yaml:'YAML', ps1:'PowerShell', sh:'Shell', xml:'XML' };
+  return languages[ext] || 'Plain Text';
+}
+
+function updateEditorPosition() {
+  const textarea = $('#file-editor-textarea');
+  const target = $('#editor-status-position');
+  if (!textarea || !target) return;
+  const before = textarea.value.slice(0, textarea.selectionStart || 0);
+  const line = before.split('\n').length;
+  const column = before.length - before.lastIndexOf('\n');
+  target.textContent = 'Ln ' + line + ', Col ' + column;
+}
+
+function updateEditorGutter() {
+  const textarea = $('#file-editor-textarea');
+  const gutter = $('#file-editor-gutter');
+  if (!textarea || !gutter) return;
+  const value = textarea.value || '';
+  const lineCount = value.split('\n').length;
+  gutter.textContent = Array.from({ length: lineCount }, (_, index) => index + 1).join('\n');
+  gutter.scrollTop = textarea.scrollTop;
+  const meta = $('#editor-file-meta');
+  if (meta) meta.textContent = currentOpenFile ? lineCount + ' linhas · ' + formatBytes(new TextEncoder().encode(value).length) : 'Abra um arquivo para começar';
+  const language = $('#editor-status-language');
+  if (language) language.textContent = currentOpenFile ? editorLanguage(currentOpenFile) : 'Plain Text';
+  const crumb = $('#editor-crumb-file');
+  if (crumb) crumb.textContent = currentOpenFile ? currentOpenFile.replace(/\\/g, '/') : 'selecione um arquivo';
+  updateEditorPosition();
+}
+
+function renderEditorTabs() {
+  const host = $('#editor-tabs');
+  if (!host) return;
+  if (!openEditorTabs.length) {
+    host.innerHTML = '<div class="editor-tab-empty">Nenhum arquivo aberto</div>';
+    return;
+  }
+  host.innerHTML = openEditorTabs.map(tab => {
+    const basename = tab.path.split(/[\\/]/).pop() || tab.path;
+    const ext = basename.includes('.') ? basename.split('.').pop() : '';
+    const active = tab.path === currentOpenFile ? ' active' : '';
+    const dirty = tab.dirty ? '<i class="editor-tab-dirty" title="Alterações não salvas"></i>' : '';
+    return '<button type="button" class="editor-tab' + active + '" data-editor-tab-path="' + escapeHtml(tab.path) + '" title="' + escapeHtml(tab.path) + '">' +
+      getFileIcon(ext) + '<span class="editor-tab-name">' + escapeHtml(basename) + '</span>' + dirty +
+      '<span class="editor-tab-close" data-close-editor-tab="' + escapeHtml(tab.path) + '" role="button" aria-label="Fechar ' + escapeHtml(basename) + '" title="Fechar">×</span></button>';
+  }).join('');
+}
+
+function setEditorFileHeader(path) {
+  const basename = path ? path.split(/[\\/]/).pop() : 'Nenhum arquivo selecionado';
+  const ext = path && basename.includes('.') ? basename.split('.').pop().toLowerCase() : '';
   const badge = $('#editor-file-badge');
   if (badge) {
-    badge.style.display = 'inline-block';
-    badge.textContent = relPath.split('.').pop()?.toUpperCase() || 'ARQUIVO';
+    badge.className = 'file-type-icon icon-' + escapeHtml(ext);
+    badge.textContent = ext ? ext.toUpperCase().slice(0, 3) : 'FILE';
+    badge.style.display = path ? 'inline-grid' : 'none';
   }
-  const textarea = $('#file-editor-textarea');
+  const heading = $('#editor-active-file');
+  if (heading) heading.textContent = basename;
+  const tab = openEditorTabs.find(item => item.path === path);
   const saveBtn = $('#editor-save-btn');
-  textarea.disabled = true;
-  textarea.value = 'Carregando conteúdo…';
-  saveBtn.disabled = true;
+  if (saveBtn) saveBtn.disabled = !tab || !tab.dirty;
+}
 
-  try {
-    const data = await api(`/api/files/read?path=${encodeURIComponent(relPath)}${activeProjectId ? `&projectId=${encodeURIComponent(activeProjectId)}` : ''}`);
-    currentFileContent = data.content;
-    textarea.value = data.content;
-    textarea.disabled = false;
-    saveBtn.disabled = false;
-    const lines = (data.content.match(/\n/g) || []).length + 1;
-    const metaEl = $('#editor-file-meta');
-    if (metaEl) metaEl.textContent = `${lines} linhas · ${formatBytes(data.content.length)}`;
-  } catch (error) {
-    textarea.value = `Erro ao abrir arquivo: ${error.message}`;
-    toast(`Falha ao abrir arquivo: ${error.message}`, true);
+async function openFile(relPath) {
+  let tab = openEditorTabs.find(item => item.path === relPath);
+  const textarea = $('#file-editor-textarea');
+  if (!tab) {
+    currentOpenFile = relPath;
+    setEditorFileHeader(relPath);
+    if (textarea) { textarea.disabled = true; textarea.value = 'Carregando conteúdo…'; }
+    const url = '/api/files/read?path=' + encodeURIComponent(relPath) + (activeProjectId ? '&projectId=' + encodeURIComponent(activeProjectId) : '');
+    try {
+      const data = await api(url);
+      tab = { path: relPath, content: data.content, savedContent: data.content, dirty: false };
+      openEditorTabs.push(tab);
+    } catch (error) {
+      if (textarea) textarea.value = 'Erro ao abrir arquivo: ' + error.message;
+      toast('Falha ao abrir arquivo: ' + error.message, true);
+      return;
+    }
   }
+  currentOpenFile = relPath;
+  currentFileContent = tab.content;
+  if (textarea) { textarea.value = tab.content; textarea.disabled = false; }
+  $$('.file-item').forEach(el => el.classList.toggle('active', el.dataset.filePath === relPath));
+  setEditorFileHeader(relPath);
+  renderEditorTabs();
+  updateEditorGutter();
+}
+
+function closeEditorTab(relPath) {
+  const tab = openEditorTabs.find(item => item.path === relPath);
+  if (!tab) return;
+  if (tab.dirty && !confirm('O arquivo "' + relPath + '" tem alterações não salvas. Fechar mesmo assim?')) return;
+  const index = openEditorTabs.findIndex(item => item.path === relPath);
+  openEditorTabs.splice(index, 1);
+  if (currentOpenFile === relPath) {
+    const next = openEditorTabs[Math.min(index, openEditorTabs.length - 1)];
+    if (next) {
+      void openFile(next.path);
+    } else {
+      currentOpenFile = null;
+      currentFileContent = '';
+      const textarea = $('#file-editor-textarea');
+      if (textarea) { textarea.value = ''; textarea.disabled = true; }
+      setEditorFileHeader(null);
+      updateEditorGutter();
+      renderEditorTabs();
+    }
+  } else {
+    renderEditorTabs();
+  }
+}
+
+function filterFileTree(query) {
+  const host = $('#file-tree-container');
+  if (!host) return;
+  const term = String(query || '').trim().toLowerCase();
+  $$('.tree-item', host).forEach(item => {
+    const path = item.dataset.filePath || item.dataset.path || '';
+    const label = item.querySelector('.tree-name')?.textContent || '';
+    item.hidden = Boolean(term) && !(path + ' ' + label).toLowerCase().includes(term);
+  });
+  $$('.file-tree-dir', host).forEach(folder => {
+    const own = folder.querySelector(':scope > .dir-item');
+    const descendants = [...folder.querySelectorAll('.tree-item')].some(item => !item.hidden);
+    const folderName = own?.querySelector('.tree-name')?.textContent || '';
+    const ownMatch = Boolean(term) && folderName.toLowerCase().includes(term);
+    folder.hidden = Boolean(term) && !descendants && !ownMatch;
+    if (term && ownMatch) folder.querySelectorAll('.tree-item').forEach(item => { item.hidden = false; });
+  });
 }
 
 async function saveCurrentFile() {
   if (!currentOpenFile) return;
+  const tab = openEditorTabs.find(item => item.path === currentOpenFile);
   const saveBtn = $('#editor-save-btn');
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Salvando…';
-
   const newContent = $('#file-editor-textarea').value;
+  if (tab) { tab.content = newContent; tab.dirty = newContent !== tab.savedContent; }
+  if (!tab || !tab.dirty) { if (saveBtn) saveBtn.disabled = true; return; }
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Salvando…'; }
   try {
     const res = await api('/api/files/save', {
       method: 'POST',
-      body: JSON.stringify({
-        path: currentOpenFile,
-        content: newContent,
-        projectId: activeProjectId || undefined
-      })
+      body: JSON.stringify({ path: currentOpenFile, content: newContent, projectId: activeProjectId || undefined })
     });
     currentFileContent = newContent;
+    tab.savedContent = newContent;
+    tab.content = newContent;
+    tab.dirty = false;
+    renderEditorTabs();
+    updateEditorGutter();
     toast(res.message || 'Arquivo salvo com sucesso!');
   } catch (error) {
-    toast(`Erro ao salvar arquivo: ${error.message}`, true);
+    toast('Erro ao salvar arquivo: ' + error.message, true);
   } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = '💾 Salvar Arquivo';
+    if (saveBtn) {
+      saveBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>Salvar <kbd>Ctrl S</kbd>';
+      saveBtn.disabled = !tab.dirty;
+    }
   }
 }
 
