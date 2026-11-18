@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080c14">
-  <title>ANTIGRAVITY // GODMODE CORE</title>
+  <title>LUPID — AI Dev Environment</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -13,8 +13,8 @@
       <div class="brand">
         <div class="brand-mark">▲</div>
         <div>
-          <div class="brand-title">ANTIGRAVITY</div>
-          <div class="brand-subtitle">GODMODE CORE · WORKSPACE</div>
+          <div class="brand-title">LUPID</div>
+          <div class="brand-subtitle">WORKSPACE INTELIGENTE</div>
         </div>
       </div>
 
@@ -29,6 +29,8 @@
         <button class="nav-item" data-view="files"><span class="nav-icon">📁</span> Arquivos & Editor</button>
         <button class="nav-item" data-view="agents"><span class="nav-icon">🤖</span> Multiagente (7)</button>
         <button class="nav-item" data-view="projects"><span class="nav-icon">📂</span> Projetos</button>
+        <button class="nav-item" data-view="workspace"><span class="nav-icon">⚡</span> Área de Trabalho</button>
+        <button class="nav-item" data-view="taskqueue"><span class="nav-icon">📋</span> Fila de Tarefas</button>
       </nav>
 
       <div class="nav-group-label">FERRAMENTAS & DADOS</div>
@@ -54,7 +56,7 @@
       <div class="sidebar-bottom">
         <span id="gateway-indicator" class="status-dot"></span>
         <div>
-          <div class="sidebar-status">Núcleo Antigravity</div>
+          <div class="sidebar-status">Núcleo LUPID</div>
           <div id="gateway-status" class="sidebar-meta">Verificando conexão…</div>
         </div>
         <span class="local-lock" title="Execução estritamente local (loopback)">🔒</span>
@@ -64,11 +66,11 @@
     <main class="main-area">
       <header class="topbar">
         <div>
-          <div id="breadcrumb" class="breadcrumb">ANTIGRAVITY / CHAT DO AGENTE</div>
+          <div id="breadcrumb" class="breadcrumb">LUPID / CHAT DO AGENTE</div>
           <h1 id="page-title">Chat do Agente</h1>
         </div>
         <div class="topbar-actions">
-          <span class="local-badge"><span class="status-dot online"></span> AGY SANDBOX LOCAL</span>
+          <span class="local-badge"><span class="status-dot online"></span> LUPID LOCAL</span>
           <button id="new-chat-top" class="button primary small">＋ Nova conversa</button>
         </div>
       </header>
@@ -349,6 +351,77 @@
         <div id="monitor-feed" class="monitor-feed"></div>
       </section>
 
+      <!-- VIEW: ÁREA DE TRABALHO DO AGENTE -->
+      <section id="view-workspace" class="view">
+        <div class="view-intro">
+          <div>
+            <h2>Área de Trabalho do Agente</h2>
+            <p>Terminal em tempo real, diff ao vivo e fila de aprovações do agente.</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <span id="agent-trust-badge" class="status-pill">Modo: Cauteloso</span>
+            <button id="clear-workspace-log" class="button secondary small">↺ Limpar Log</button>
+          </div>
+        </div>
+        <!-- Trust level selector -->
+        <div class="panel" style="margin-bottom:14px;">
+          <div class="panel-heading"><div><h3>Nível de Autonomia</h3><p>Define o quanto o agente pode executar sem pedir aprovação.</p></div></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <label class="trust-option"><input type="radio" name="trust-level" value="cautious" checked> <span class="trust-label trust-cautious">🔴 Cauteloso</span> <small>Toda alteração pede aprovação</small></label>
+            <label class="trust-option"><input type="radio" name="trust-level" value="assisted"> <span class="trust-label trust-assisted">🟡 Assistido</span> <small>Leitura livre, escrita pede confirmação</small></label>
+            <label class="trust-option"><input type="radio" name="trust-level" value="autonomous"> <span class="trust-label trust-autonomous">🟢 Autônomo</span> <small>Executa tudo, exceto delete e rede</small></label>
+          </div>
+        </div>
+        <!-- Agent Action Log -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;">
+          <div class="panel" style="display:flex;flex-direction:column;overflow:hidden;">
+            <div class="panel-heading"><div><h3>📋 Log de Ações do Agente</h3><p>Cada ferramenta usada, com resultado e tempo.</p></div></div>
+            <div id="agent-action-log" class="monitor-feed" style="flex:1;"></div>
+          </div>
+          <div class="panel" style="display:flex;flex-direction:column;overflow:hidden;">
+            <div class="panel-heading"><div><h3>💻 Terminal (Saída ao Vivo)</h3><p>Saída dos comandos executados pelo agente.</p></div></div>
+            <div id="agent-terminal-output" style="flex:1;background:#050810;border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3e635;overflow-y:auto;white-space:pre-wrap;">$ Aguardando comandos do agente...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: FILA DE TAREFAS -->
+      <section id="view-taskqueue" class="view">
+        <div class="view-intro">
+          <div>
+            <h2>Fila de Tarefas do Agente</h2>
+            <p>Adicione tarefas e o agente as executa sequencialmente de forma autônoma.</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="run-task-queue" class="button primary small">▶ Iniciar Fila</button>
+            <button id="clear-task-queue" class="button secondary small">× Limpar</button>
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:14px;">
+          <div class="panel-heading"><div><h3>Nova Tarefa</h3><p>Adicione instruções para a fila de execução sequencial.</p></div></div>
+          <form id="task-queue-form" style="display:flex;gap:10px;">
+            <input id="task-queue-input" class="input" style="flex:1;" placeholder="Ex: Implemente testes unitários para o módulo auth, depois revise os tipos TypeScript...">
+            <select id="task-agent-select" class="select" style="width:160px;">
+              <option value="auto">🤖 Auto (Orquestrador)</option>
+              <option value="coder">💻 Programador</option>
+              <option value="researcher">🔍 Pesquisador</option>
+              <option value="reviewer">🛡 Revisor</option>
+              <option value="tester">🧪 Testador</option>
+              <option value="architect">🏛 Arquiteto</option>
+            </select>
+            <button class="button primary" type="submit">+ Adicionar</button>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="panel-heading">
+            <div><h3>Fila de Execução</h3><p id="task-queue-count">0 tarefa(s) na fila</p></div>
+          </div>
+          <div id="task-queue-list" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="empty-inline">Nenhuma tarefa na fila. Adicione instruções acima.</div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 8: PROVEDORES DE IA -->
       <section id="view-providers" class="view">
         <div class="view-intro">
@@ -383,19 +456,19 @@
         <div id="system-overview" class="system-grid"></div>
         <div class="panel api-panel" style="margin-top:18px;">
           <div class="panel-heading">
-            <div><h3>API compatível com OpenAI</h3><p>Utilize o GODMODE CORE em outros clientes locais que aceitam API OpenAI.</p></div>
+            <div><h3>API compatível com OpenAI</h3><p>Utilize o LUPID em outros clientes locais que aceitam API OpenAI.</p></div>
             <span class="protocol-pill">REST + CHAT COMPLETIONS</span>
           </div>
           <div class="endpoint-row">
             <div><small>ENDPOINT LOCAL</small><code id="openai-endpoint">http://127.0.0.1:8765/v1</code></div>
             <button id="copy-endpoint" class="button secondary small">Copiar Endpoint</button>
           </div>
-          <p class="muted-note">O modelo deve seguir o formato <code>godmode/ID_DO_PROVEDOR/ID_DO_MODELO</code>. O acesso é estritamente limitado ao loopback do computador local.</p>
+          <p class="muted-note">O modelo deve seguir o formato <code>lupid/ID_DO_PROVEDOR/ID_DO_MODELO</code>. O acesso é estritamente limitado ao loopback do computador local.</p>
         </div>
       </section>
 
       <footer class="main-footer">
-        <span>ANTIGRAVITY // GODMODE CORE v1.0</span>
+        <span>LUPID v2.0</span>
         <span>Execução 100% Local · Sandbox Isolado · Permissões Explícitas</span>
       </footer>
     </main>
