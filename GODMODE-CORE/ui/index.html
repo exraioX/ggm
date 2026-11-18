@@ -482,6 +482,20 @@
           </form>
         </div>
         <div id="provider-list" class="provider-list-rows"></div>
+        <details class="provider-guide">
+          <summary>Como usar o OmniRoute com o GODMODE</summary>
+          <div class="provider-guide-body">
+            <ol>
+              <li>Instale o gateway no terminal: <code>npm install -g omniroute</code>.</li>
+              <li>Inicie com <code>omniroute</code> e abra <code>http://127.0.0.1:20128</code>.</li>
+              <li>No painel do OmniRoute, conecte os provedores que deseja usar e crie uma chave em <strong>Endpoints</strong>.</li>
+              <li>Clique em <strong>Conectar OmniRoute</strong> aqui, cole essa chave e salve. O GODMODE usará <code>http://127.0.0.1:20128/v1</code>.</li>
+              <li>No Chat, selecione OmniRoute e escolha <code>auto</code>, <code>auto/coding</code> ou um modelo/provedor listado por ele.</li>
+            </ol>
+            <p>O OmniRoute é um serviço separado: precisa estar aberto para rotear as chamadas. A chave do gateway fica em memória no núcleo e precisa ser inserida novamente após reiniciar o GODMODE, salvo se você configurar outro método de credencial.</p>
+            <a href="https://github.com/cheaper-inference/omniroute" target="_blank" rel="noreferrer">Documentação oficial e versões do OmniRoute ↗</a>
+          </div>
+        </details>
       </section>
 
       <!-- VIEW 9: SISTEMA & API -->
