@@ -2377,7 +2377,7 @@ $('#connect-all-mcp')?.addEventListener('click', async () => {
   if (!confirm(`Conectar todos os servidores MCP habilitados (${count})?`)) return;
   try {
     const result = await api('/api/mcp/servers/connect-all', { method: 'POST', body: '{}' });
-    await loadMcp();
+    await loadPluginManager();
     const failed = result.results.filter(item => !item.ok);
     toast(failed.length ? `${failed.length} servidores não conectaram.` : 'Todos os servidores conectados.');
   } catch (error) { toast(error.message, true); }
