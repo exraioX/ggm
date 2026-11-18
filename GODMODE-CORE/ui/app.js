@@ -43,6 +43,8 @@ let activeConversationId = localStorage.getItem('godmode-core-active-chat') || '
 let pendingAttachments = [];
 let currentOpenFile = null;
 let currentFileContent = '';
+let openEditorTabs = [];
+let commandPaletteSelection = 0;
 
 const MAX_ATTACHMENTS = 4;
 const MAX_ATTACHMENT_SOURCE_BYTES = 12 * 1024 * 1024;
@@ -661,7 +663,7 @@ function renderFileTreeNodes(nodes, depth = 0) {
         <div class="file-tree-dir" style="margin-left:${indent}px;">
           <div class="tree-item dir-item" data-path="${escapeHtml(node.path)}">
             <span class="tree-arrow">▾</span>
-            <span class="tree-icon">📁</span>
+            <span class="tree-icon folder-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H10l2 2h7.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z"/></svg></span>
             <span class="tree-name">${escapeHtml(node.name)}</span>
           </div>
           <div class="tree-dir-children">${childrenHtml}</div>
@@ -681,18 +683,10 @@ function renderFileTreeNodes(nodes, depth = 0) {
 }
 
 function getFileIcon(ext) {
-  switch (ext?.toLowerCase()) {
-    case 'ts':
-    case 'tsx': return '📘';
-    case 'js':
-    case 'jsx': return '📒';
-    case 'json': return '📋';
-    case 'md': return '📝';
-    case 'html': return '🌐';
-    case 'css': return '🎨';
-    case 'py': return '🐍';
-    default: return '📄';
-  }
+  const type = String(ext || '').toLowerCase();
+  const labels = { ts:'TS', tsx:'TSX', js:'JS', jsx:'JSX', mjs:'JS', cjs:'JS', json:'{}', md:'MD', mdx:'MDX', html:'5', htm:'5', css:'#', scss:'S', sass:'S', py:'Py', yml:'Y', yaml:'Y', rs:'Rs', go:'Go', java:'J', kt:'Kt', cs:'C#', cpp:'C++', c:'C', sh:'$_', ps1:'PS', sql:'DB', toml:'T', xml:'X', env:'ENV' };
+  const label = labels[type] || '•';
+  return '<span class="file-type-icon icon-' + escapeHtml(type) + '">' + escapeHtml(label) + '</span>';
 }
 
 function formatBytes(bytes) {
