@@ -104,7 +104,10 @@ export class ProviderRegistry {
     if (!modelIds.length) {
       const endpoint = new URL(provider.baseUrl);
       const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(endpoint.hostname);
-      if (!isLoopback) {
+      const isOllama = provider.id.toLowerCase() === 'ollama'
+        || provider.name.toLowerCase().includes('ollama')
+        || endpoint.port === '11434';
+      if (!isLoopback || !isOllama) {
         if (openAiListError) throw openAiListError;
       } else {
         endpoint.pathname = '/api/tags';
