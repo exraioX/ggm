@@ -1773,6 +1773,23 @@ function appendMonitorEvent(event) {
   renderMonitorStats();
 }
 
+async function clearMonitorHistory() {
+  const button = $('#monitor-clear');
+  if (button) { button.disabled = true; button.textContent = 'Limpando…'; }
+  try {
+    await api('/api/monitor/clear', { method:'POST', body:'{}' });
+    monitorEvents = [];
+    renderMonitorFeed();
+    renderMonitorStats();
+    renderAgentTerminal();
+    toast('Histórico de execução limpo.');
+  } catch (error) {
+    toast('Não foi possível limpar o histórico: ' + error.message, true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Limpar eventos'; }
+  }
+}
+
 function renderAgentTerminal() {
   const host = $('#agent-terminal-output');
   if (!host) return;
@@ -2031,19 +2048,7 @@ async function clearTaskQueue() {
 // ============================================================
 
 function initWorkspace() {
-  $$('input[name="trust-level"]').forEach(input => {
-    input.addEventListener('change', () => {
-      const level = input.value;
-      const badge = $('#agent-trust-badge');
-      const labels = { cautious: '🔴 Modo: Cauteloso', assisted: '🟡 Modo: Assistido', autonomous: '🟢 Modo: Autônomo' };
-      if (badge) badge.textContent = labels[level] || '';
-      localStorage.setItem('lupid-trust-level', level);
-      toast(`Modo de operação alterado: ${labels[level]}`);
-    });
-  });
-  const saved = localStorage.getItem('lupid-trust-level') || 'cautious';
-  const savedInput = $(`input[name="trust-level"][value="${saved}"]`);
-  if (savedInput) savedInput.checked = true;
+  // O workspace operacional é alimentado pelo mesmo stream usado pela timeline.
   initMonitorIfNeeded();
   renderMonitorFeed();
   renderMonitorStats();
@@ -2056,14 +2061,7 @@ function initWorkspace() {
 
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => setView(button.dataset.view)));
 
-document.addEventListener('click', event => {
-  if (event.target && event.target.id === 'monitor-clear') {
-    monitorEvents = [];
-    renderMonitorFeed();
-    renderMonitorStats();
-    renderAgentTerminal();
-  }
-});
+$('#monitor-clear')?.addEventListener('click', clearMonitorHistory);
 
 $('#new-chat-side')?.addEventListener('click', createConversation);
 $('#new-chat-top')?.addEventListener('click', createConversation);
@@ -2252,14 +2250,7 @@ $('#mcp-prompts-list')?.addEventListener('click', event => {
   if (button) void inspectMcpPrompt(button.dataset.server, button.dataset.promptName);
 });
 
-$('#clear-workspace-log')?.addEventListener('click', () => {
-  const terminal = $('#agent-terminal-output');
-  monitorEvents = [];
-  renderMonitorFeed();
-  renderMonitorStats();
-  if (terminal) terminal.textContent = '$ Aguardando comandos do agente...';
-  toast('Histórico de execução limpo.');
-});
+
 
 async function init() {
   if (!conversations.length) createConversation();
