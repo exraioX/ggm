@@ -30,6 +30,8 @@ interface ToolResultEvent extends BaseEvent {
   tool: string;
   durationMs: number;
   isError: boolean;
+  output?: string;
+  exitCode?: number | null;
 }
 
 interface TokenUsageEvent extends BaseEvent {
