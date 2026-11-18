@@ -67,7 +67,10 @@ A revisão de produto e código consolidou fluxos que antes estavam separados:
 - [x] Estrutura HTML revisada: IDs duplicados ausentes e todos os destinos `data-view` com uma tela correspondente.
 - [x] Revisados os contratos de UI/API para missão, fila, TestRunner e resources/prompts MCP.
 - [x] Conferida a presença dos estilos das novas áreas.
-- [ ] `npm ci`, `npm run typecheck` e `npm test` não foram executados neste ambiente. O conector do GitHub não retornou nenhuma execução de Actions para a branch nesta auditoria; portanto, não há resultado remoto para marcar como aprovado.
+- [x] GitHub Actions run [#44328129435](https://github.com/exraioX/ggm/actions/runs/44328129435), no commit `472fddc`, concluiu com sucesso usando `actions/checkout@v7` e `actions/setup-node@v7`.
+- [x] `npm ci` concluiu com sucesso no GitHub Actions.
+- [x] `npm run typecheck` concluiu com sucesso no GitHub Actions.
+- [x] `npm test` concluiu com **38 testes aprovados, 0 falhas, 0 cancelados e 0 ignorados** (duração aproximada: 2,3 s).
 - [ ] Inicialização no Windows, conexão real com modelo, execução de comandos no projeto do usuário e consultas a servidores MCP externos ainda dependem de teste no computador de destino.
 
-Não interpretar a presença do workflow de CI ou dos testes adicionados como prova de que a suíte passou. O status só deve ser marcado como aprovado após uma execução real do GitHub Actions ou uma execução local completa.
+A aprovação acima corresponde ao commit `472fddc` e a todas as mudanças de código desta auditoria; o commit de documentação deste arquivo não altera o código testado. A validação do GitHub Actions cobre typecheck e testes automatizados, mas não substitui o teste visual no navegador nem a conexão com provedores e servidores MCP reais.
