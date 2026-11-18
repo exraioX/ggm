@@ -388,7 +388,6 @@ function setActiveChatModel(value) {
 async function loadProviders() {
   const result = await api('/api/providers');
   providers = result.providers || [];
-  updateProviderSelect();
   renderProviders();
 }
 
@@ -2170,6 +2169,26 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 
 $('#monitor-clear')?.addEventListener('click', clearMonitorHistory);
 
+$('#sidebar-search')?.addEventListener('input', event => {
+  sidebarSearchText = event.target.value || '';
+  renderSidebarProjects();
+  renderConversationList();
+  if ($('#sidebar-search-clear')) $('#sidebar-search-clear').hidden = !sidebarSearchText;
+});
+$('#sidebar-search-clear')?.addEventListener('click', () => {
+  sidebarSearchText = '';
+  if ($('#sidebar-search')) $('#sidebar-search').value = '';
+  $('#sidebar-search-clear').hidden = true;
+  renderSidebarProjects();
+  renderConversationList();
+});
+$('#sidebar-add-project')?.addEventListener('click', () => {
+  setView('projects');
+  window.setTimeout(() => $('#proj-name')?.focus(), 0);
+});
+$('#sidebar-collapse')?.addEventListener('click', () => {
+  document.querySelector('.app-shell')?.classList.toggle('sidebar-collapsed');
+});
 $('#new-chat-side')?.addEventListener('click', createConversation);
 $('#new-chat-top')?.addEventListener('click', createConversation);
 $('#chat-form')?.addEventListener('submit', sendMessage);
@@ -2344,6 +2363,8 @@ document.addEventListener('keydown', event => {
     }
   }
   if (modifier && event.shiftKey && key === 'p') { event.preventDefault(); openCommandPalette(); return; }
+  if (modifier && key === 'k' && $('#sidebar-search')) { event.preventDefault(); $('#sidebar-search').focus(); return; }
+  if (modifier && event.shiftKey && key === 'o') { event.preventDefault(); createConversation(); return; }
   if (modifier && key === '1') { event.preventDefault(); setView('chat'); return; }
   if (modifier && key === '2') { event.preventDefault(); setView('files'); return; }
   if (modifier && key === 's' && currentOpenFile && $('#view-files')?.classList.contains('active')) {
