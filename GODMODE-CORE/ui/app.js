@@ -2198,11 +2198,11 @@ $('#command-palette-results')?.addEventListener('click', event => {
 $('#command-palette-results')?.addEventListener('mousemove', event => {
   const row = event.target.closest('[data-command-id]');
   if (!row) return;
-  const rows = $('[data-command-id]', $('#command-palette-results'));
+  const rows = $$('[data-command-id]', $('#command-palette-results'));
   commandPaletteSelection = rows.indexOf(row);
   rows.forEach((item, index) => item.classList.toggle('active', index === commandPaletteSelection));
 });
-$('[data-close-palette]').forEach(node => node.addEventListener('click', closeCommandPalette));
+$$('[data-close-palette]').forEach(node => node.addEventListener('click', closeCommandPalette));
 $('#toggle-sidebar')?.addEventListener('click', () => {
   document.querySelector('.app-shell')?.classList.toggle('sidebar-collapsed');
 });
@@ -2214,7 +2214,7 @@ document.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); closeCommandPalette(); return; }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
-      const rows = $('[data-command-id]', $('#command-palette-results'));
+      const rows = $$('[data-command-id]', $('#command-palette-results'));
       if (!rows.length) return;
       commandPaletteSelection = (commandPaletteSelection + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
       rows.forEach((row, index) => row.classList.toggle('active', index === commandPaletteSelection));
@@ -2223,7 +2223,7 @@ document.addEventListener('keydown', event => {
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      const row = $('[data-command-id]', $('#command-palette-results'))[commandPaletteSelection];
+      const row = $$('[data-command-id]', $('#command-palette-results'))[commandPaletteSelection];
       if (row) executeWorkbenchCommand(row.dataset.commandId);
       return;
     }
