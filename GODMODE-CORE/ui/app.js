@@ -500,6 +500,12 @@ async function submitProvider(event) {
   event.preventDefault();
   const id = $('#provider-id').value.trim().toLowerCase();
   const secret = $('#provider-secret')?.value || '';
+  const existingProvider = providers.find(item => item.id === id);
+  if (id === 'omniroute' && !secret.trim() && !existingProvider?.hasSecret) {
+    toast('Informe a API key criada em OmniRoute → Endpoints antes de salvar.', true);
+    $('#provider-secret')?.focus();
+    return;
+  }
   const data = {
     id,
     name: $('#provider-name').value.trim(),
