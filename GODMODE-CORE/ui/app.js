@@ -110,6 +110,60 @@ function setView(view) {
   if (view === 'taskqueue') loadTaskQueue();
 }
 
+const WORKBENCH_COMMANDS = [
+  { id:'chat', label:'Abrir Chat do Agente', detail:'Ctrl+1', icon:'◈', run:() => setView('chat') },
+  { id:'files', label:'Abrir Explorer e Editor', detail:'Ctrl+2', icon:'▤', run:() => setView('files') },
+  { id:'agents', label:'Abrir Multiagentes', detail:'Especialistas e workflows', icon:'⌘', run:() => setView('agents') },
+  { id:'projects', label:'Gerenciar Projetos', detail:'Workspaces locais', icon:'▰', run:() => setView('projects') },
+  { id:'mcp', label:'Abrir Extensões e MCP', detail:'Servidores e ferramentas', icon:'◇', run:() => setView('mcp') },
+  { id:'memory', label:'Abrir Memória', detail:'Contexto persistente', icon:'▥', run:() => setView('memory') },
+  { id:'monitor', label:'Abrir Monitor', detail:'Eventos e uso de ferramentas', icon:'⌁', run:() => setView('monitor') },
+  { id:'workspace', label:'Abrir Terminal do Agente', detail:'Saída e permissões', icon:'>_', run:() => setView('workspace') },
+  { id:'taskqueue', label:'Abrir Fila de Tarefas', detail:'Execução sequencial', icon:'☷', run:() => setView('taskqueue') },
+  { id:'providers', label:'Configurar Provedores de IA', detail:'Ollama, LM Studio, llama.cpp…', icon:'◉', run:() => setView('providers') },
+  { id:'settings', label:'Abrir Sistema e API', detail:'Diagnóstico local', icon:'⚙', run:() => setView('settings') },
+  { id:'new-chat', label:'Nova conversa', detail:'Criar um chat', icon:'＋', run:() => createConversation() },
+  { id:'save-file', label:'Salvar arquivo atual', detail:'Ctrl+S', icon:'▣', run:() => saveCurrentFile() },
+  { id:'refresh-tree', label:'Atualizar árvore de arquivos', detail:'Explorer', icon:'↻', run:() => { setView('files'); void loadFileTree(); } }
+];
+
+function renderCommandPalette() {
+  const input = $('#command-palette-input');
+  const results = $('#command-palette-results');
+  if (!input || !results) return;
+  const query = input.value.trim().toLowerCase();
+  const filtered = WORKBENCH_COMMANDS.filter(command => (command.label + ' ' + command.detail).toLowerCase().includes(query));
+  commandPaletteSelection = Math.min(commandPaletteSelection, Math.max(0, filtered.length - 1));
+  results.innerHTML = filtered.length ? filtered.map((command, index) =>
+    '<button type="button" class="command-result' + (index === commandPaletteSelection ? ' active' : '') + '" data-command-id="' + command.id + '">' +
+    '<span class="command-result-icon">' + command.icon + '</span><span class="command-result-label">' + command.label + '</span><span class="command-result-detail">' + command.detail + '</span></button>'
+  ).join('') : '<div class="empty-inline">Nenhum comando encontrado.</div>';
+}
+
+function openCommandPalette() {
+  const palette = $('#command-palette');
+  const input = $('#command-palette-input');
+  if (!palette || !input) return;
+  palette.hidden = false;
+  input.value = '';
+  commandPaletteSelection = 0;
+  renderCommandPalette();
+  input.focus();
+}
+
+function closeCommandPalette() {
+  const palette = $('#command-palette');
+  if (palette) palette.hidden = true;
+  $('#command-center-button')?.blur();
+}
+
+function executeWorkbenchCommand(id) {
+  const command = WORKBENCH_COMMANDS.find(item => item.id === id);
+  if (!command) return;
+  closeCommandPalette();
+  command.run();
+}
+
 function createConversation() {
   const conversation = {
     id: crypto.randomUUID(),
@@ -1849,11 +1903,90 @@ $('#copy-endpoint')?.addEventListener('click', async () => {
   }
 });
 
-// New Antigravity / LUPID Feature Bindings
+// Workbench editor, tabs, quick search and command palette.
 $('#refresh-file-tree')?.addEventListener('click', loadFileTree);
 $('#editor-save-btn')?.addEventListener('click', saveCurrentFile);
+$('#file-editor-textarea')?.addEventListener('input', () => {
+  const textarea = $('#file-editor-textarea');
+  const tab = openEditorTabs.find(item => item.path === currentOpenFile);
+  if (tab && textarea) {
+    tab.content = textarea.value;
+    tab.dirty = tab.content !== tab.savedContent;
+    if ($('#editor-save-btn')) $('#editor-save-btn').disabled = !tab.dirty;
+    renderEditorTabs();
+  }
+  updateEditorGutter();
+});
+$('#file-editor-textarea')?.addEventListener('scroll', updateEditorGutter);
+$('#file-editor-textarea')?.addEventListener('click', updateEditorPosition);
+$('#file-editor-textarea')?.addEventListener('keyup', updateEditorPosition);
+$('#file-editor-textarea')?.addEventListener('keydown', event => {
+  if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    const field = event.currentTarget;
+    field.setRangeText('  ', field.selectionStart, field.selectionEnd, 'end');
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+});
+$('#editor-tabs')?.addEventListener('click', event => {
+  const close = event.target.closest('[data-close-editor-tab]');
+  if (close) { event.stopPropagation(); closeEditorTab(close.dataset.closeEditorTab); return; }
+  const tab = event.target.closest('[data-editor-tab-path]');
+  if (tab) void openFile(tab.dataset.editorTabPath);
+});
+$('#file-tree-search')?.addEventListener('input', event => filterFileTree(event.target.value));
 $('#workflow-form')?.addEventListener('submit', runMultiAgentWorkflow);
 $('#import-claude-btn')?.addEventListener('click', syncClaudePlugins);
+
+
+// IDE command center and keyboard shortcuts.
+$('#command-center-button')?.addEventListener('click', openCommandPalette);
+$('#command-palette-input')?.addEventListener('input', () => { commandPaletteSelection = 0; renderCommandPalette(); });
+$('#command-palette-results')?.addEventListener('click', event => {
+  const command = event.target.closest('[data-command-id]');
+  if (command) executeWorkbenchCommand(command.dataset.commandId);
+});
+$('#command-palette-results')?.addEventListener('mousemove', event => {
+  const row = event.target.closest('[data-command-id]');
+  if (!row) return;
+  const rows = $('[data-command-id]', $('#command-palette-results'));
+  commandPaletteSelection = rows.indexOf(row);
+  rows.forEach((item, index) => item.classList.toggle('active', index === commandPaletteSelection));
+});
+$('[data-close-palette]').forEach(node => node.addEventListener('click', closeCommandPalette));
+$('#toggle-sidebar')?.addEventListener('click', () => {
+  document.querySelector('.app-shell')?.classList.toggle('sidebar-collapsed');
+});
+document.addEventListener('keydown', event => {
+  const key = event.key.toLowerCase();
+  const modifier = event.ctrlKey || event.metaKey;
+  const palette = $('#command-palette');
+  if (palette && !palette.hidden) {
+    if (event.key === 'Escape') { event.preventDefault(); closeCommandPalette(); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const rows = $('[data-command-id]', $('#command-palette-results'));
+      if (!rows.length) return;
+      commandPaletteSelection = (commandPaletteSelection + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+      rows.forEach((row, index) => row.classList.toggle('active', index === commandPaletteSelection));
+      rows[commandPaletteSelection]?.scrollIntoView({ block:'nearest' });
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const row = $('[data-command-id]', $('#command-palette-results'))[commandPaletteSelection];
+      if (row) executeWorkbenchCommand(row.dataset.commandId);
+      return;
+    }
+  }
+  if (modifier && event.shiftKey && key === 'p') { event.preventDefault(); openCommandPalette(); return; }
+  if (modifier && key === '1') { event.preventDefault(); setView('chat'); return; }
+  if (modifier && key === '2') { event.preventDefault(); setView('files'); return; }
+  if (modifier && key === 's' && currentOpenFile && $('#view-files')?.classList.contains('active')) {
+    event.preventDefault();
+    void saveCurrentFile();
+  }
+});
 
 // Task Queue & Workspace Bindings
 $('#task-queue-form')?.addEventListener('submit', addTask);
