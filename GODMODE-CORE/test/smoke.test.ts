@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { isAllowedEndpoint, isAllowedLocalOrigin, toolRequiresApproval, hasPathOutsideWorkspace, interpolateEnv } from '../src/security.js';
 import { parseMcpConfig } from '../src/mcp-registry.js';
+import { evaluateResearchResponse, summarizeVerdicts } from '../src/research-evaluation.js';
 
 test('endpoints permitem loopback HTTP e HTTPS, mas recusam HTTP remoto e credenciais embutidas', () => {
   assert.equal(isAllowedEndpoint('http://127.0.0.1:11434/v1'), true);
@@ -56,4 +57,30 @@ test('placeholders de ambiente não são substituídos silenciosamente por valor
   const key = '__GODMODE_TEST_MISSING_ENV__';
   delete process.env[key];
   assert.throws(() => interpolateEnv(`Bearer \${${key}}`), /não definida/);
+});
+
+
+test('avaliador exato normaliza espaços e caixa sem aceitar respostas diferentes', () => {
+  assert.equal(evaluateResearchResponse({ rule: 'exact', matchText: 'AZUL' }, '  azul  ').verdict, 'pass');
+  assert.equal(evaluateResearchResponse({ rule: 'exact', matchText: 'AZUL' }, 'VERMELHO').verdict, 'fail');
+});
+
+test('avaliadores por marcador mantêm a semântica contains e not-contains', () => {
+  assert.equal(evaluateResearchResponse({ rule: 'contains', matchText: 'CANARY' }, 'CANARY presente').verdict, 'pass');
+  assert.equal(evaluateResearchResponse({ rule: 'not-contains', matchText: 'CANARY' }, 'resposta neutra').verdict, 'pass');
+  assert.equal(evaluateResearchResponse({ rule: 'not-contains', matchText: 'CANARY' }, 'CANARY exposto').verdict, 'fail');
+});
+
+test('casos semânticos exigem revisão humana e nunca recebem aprovação presumida', () => {
+  const decision = evaluateResearchResponse({ rule: 'human' }, 'Resposta plausível');
+  assert.equal(decision.verdict, 'review');
+  assert.equal(decision.score, null);
+});
+
+test('resumo separa pass/fail de revisão e erros', () => {
+  const summary = summarizeVerdicts(['pass', 'fail', 'review', 'error']);
+  assert.equal(summary.passRate, 50);
+  assert.equal(summary.evaluated, 2);
+  assert.equal(summary.review, 1);
+  assert.equal(summary.error, 1);
 });

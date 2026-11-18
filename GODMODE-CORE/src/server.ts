@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { ALLOWED_ORIGINS, CORE_ORIGINS, HOST, MEMORY_PATH, PORT, WORKSPACE, ensureGodmodeHome, readJson, safeWriteJson } from './config.js';
 import { mcpRegistry, parseMcpConfig } from './mcp-registry.js';
 import { providerRegistry } from './providers.js';
+import { researchRouter } from './research.js';
 import { hasPathOutsideWorkspace, isAllowedEndpoint, requireLocalApp, toolRequiresApproval } from './security.js';
 
 const app = express();
@@ -29,6 +30,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '4mb' }));
 app.use(['/api', '/v1'], requireLocalApp);
+app.use('/api/research', researchRouter);
 
 interface MemoryItem { id: string; title: string; content: string; category: string; createdAt: string; updatedAt: string }
 interface ToolMapping {
@@ -219,7 +221,7 @@ app.get('/api/info', (_req, res) => res.json({
   api: 'REST + OpenAI-compatible',
   mcpTransports: ['stdio', 'streamable-http', 'sse'],
   workspace: WORKSPACE,
-  capabilities: ['providers', 'chat', 'mcp-tools', 'mcp-resources', 'mcp-prompts', 'approvals', 'persistent-memory'],
+  capabilities: ['providers', 'chat', 'mcp-tools', 'mcp-resources', 'mcp-prompts', 'approvals', 'persistent-memory', 'research-lab', 'claude-code-skills'],
 }));
 app.get('/api/providers', (_req, res) => res.json({ providers: providerRegistry.list() }));
 app.post('/api/providers', (req, res) => {

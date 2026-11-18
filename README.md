@@ -50,3 +50,12 @@ As memórias próprias do Core ficam em `%USERPROFILE%\.godmode\memory.json`; s�
 ## Preservação
 
 O G0DM0D3 original não foi substituído nem removido. O GODMODE CORE é um componente novo, independente, que expõe API para clientes locais e mantém o G0DM0D3 como interface opcional. Nenhuma integração externa foi declarada funcional sem conexão/teste no computador de destino.
+
+
+## Research Lab
+
+A branch \`llp\` acrescenta um ambiente independente para experimentos de comportamento, robustez e segurança defensiva de LLMs. Inicie o GODMODE CORE e abra \`http://127.0.0.1:8765/research.html\`. Configure os modelos na aba Provedores de IA antes de executar experimentos.
+
+O laboratório oferece casos iniciais e personalizados, execução comparativa, repetição, revisão humana, histórico e exportação JSON/CSV. Ele registra prompts e respostas no perfil local \`~/.godmode/research.json\`; use apenas dados sintéticos e modelos/endpoints que você controla ou tem autorização para avaliar. Os critérios automáticos são heurísticos e não certificam segurança.
+
+O repositório inclui Skills nativas do Claude Code em \`.claude/skills/\`. Abra Claude Code na raiz do projeto e use \`/research-design\`, \`/red-team-evaluation\`, \`/benchmark-authoring\`, \`/analyze-model-results\` ou \`/research-report\`. Consulte \`GODMODE-CORE/docs/RESEARCH-LAB.md\` e \`GODMODE-CORE/docs/CLAUDE-CODE-SKILLS.md\`.

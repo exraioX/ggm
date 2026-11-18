@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090e14">
+  <title>G0DM0D3 Research Lab</title>
+  <link rel="stylesheet" href="/research.css">
+  <script src="/research.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/">
+        <span class="brand-mark">G</span>
+        <span><strong>G0DM0D3</strong><small>RESEARCH LAB</small></span>
+      </a>
+      <div class="side-label">LABORATÓRIO</div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="overview"><span>◈</span> Visão geral</button>
+        <button class="nav-item" data-view="experiments"><span>⚗</span> Novo experimento</button>
+        <button class="nav-item" data-view="cases"><span>▤</span> Casos de teste</button>
+        <button class="nav-item" data-view="runs"><span>◷</span> Histórico de execuções</button>
+        <button class="nav-item" data-view="skills"><span>⌘</span> Claude Code Skills</button>
+      </nav>
+      <div class="side-bottom">
+        <span class="pulse"></span>
+        <span><strong>Execução local</strong><small>Dados salvos no perfil local</small></span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">GODMODE CORE / RESEARCH</div>
+          <h1 id="page-title">Visão geral</h1>
+        </div>
+        <div class="top-actions">
+          <a class="button ghost" href="/">← Voltar ao Core</a>
+          <button id="refresh-button" class="button secondary">↻ Atualizar</button>
+        </div>
+      </header>
+
+      <section id="view-overview" class="view active">
+        <div class="intro">
+          <div><h2>Laboratório de comportamento de LLMs</h2><p>Execute experimentos reproduzíveis em modelos que você controla, compare resultados e registre evidências.</p></div>
+          <button class="button primary" data-goto="experiments">＋ Criar experimento</button>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card"><span>EXECUÇÕES SALVAS</span><strong id="stat-runs">—</strong><small id="stat-active">—</small></article>
+          <article class="stat-card"><span>CASOS DE TESTE</span><strong id="stat-cases">—</strong><small id="stat-custom-cases">—</small></article>
+          <article class="stat-card"><span>APROVAÇÕES AUTOMÁTICAS</span><strong id="stat-pass-rate">—</strong><small>Somente casos avaliáveis automaticamente</small></article>
+          <article class="stat-card"><span>RESULTADOS PARA REVISAR</span><strong id="stat-review">—</strong><small>Exigem julgamento humano</small></article>
+        </div>
+        <div class="content-grid">
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Desempenho observado por modelo</h3><p>Agregado das execuções armazenadas neste perfil.</p></div></div>
+            <div id="model-performance" class="model-performance"><div class="empty">Execute um experimento para gerar comparações.</div></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Execuções recentes</h3><p>Abra uma execução para inspecionar cada resposta.</p></div><button class="text-button" data-goto="runs">Ver histórico →</button></div>
+            <div id="latest-runs" class="latest-runs"><div class="empty">Nenhuma execução registrada.</div></div>
+          </section>
+        </div>
+        <div class="notice"><strong>Escopo e limitações.</strong> Os avaliadores automáticos são heurísticas transparentes, não certificações de segurança. Os testes usam conversas sem ferramentas; eles não medem isoladamente proteções de sistema, servidor ou aplicação. Revise manualmente os resultados antes de concluir que um modelo é seguro.</div>
+      </section>
+
+      <section id="view-experiments" class="view">
+        <div class="intro"><div><h2>Configurar experimento</h2><p>Escolha os modelos, os casos de teste e os parâmetros. As chamadas são feitas pelos provedores já cadastrados no GODMODE CORE.</p></div></div>
+        <form id="experiment-form">
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Identificação</h3><p>Use um nome que descreva a hipótese ou objetivo da pesquisa.</p></div></div>
+            <div class="form-grid">
+              <label>Nome do experimento<input id="experiment-name" maxlength="120" required placeholder="Ex.: Robustez a instruções conflitantes"></label>
+              <label>Descrição / hipótese<input id="experiment-description" maxlength="600" placeholder="O que você pretende observar?"></label>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Modelos participantes</h3><p>Você pode comparar até seis alvos. Cada alvo usa um provedor e um identificador de modelo.</p></div><button id="add-target" type="button" class="button secondary small">＋ Adicionar modelo</button></div>
+            <div id="target-list" class="target-list"></div>
+            <p class="helper">Use “Buscar” para consultar os identificadores oferecidos pelo provedor. Para Ollama, o nome precisa corresponder ao modelo instalado e exposto pela API.</p>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Bateria de testes</h3><p>Selecione casos padrão ou seus próprios casos. Cada modelo executará todos os casos selecionados.</p></div><div class="inline-actions"><button id="select-all-cases" type="button" class="text-button">Selecionar todos</button><button id="clear-cases" type="button" class="text-button">Limpar</button></div></div>
+            <div id="experiment-cases" class="case-select-list"><div class="empty">Carregando casos de teste…</div></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Parâmetros de execução</h3><p>Repetições ajudam a observar variação de resposta; aumentam o número de chamadas.</p></div></div>
+            <div class="parameter-grid">
+              <label>Repetições por caso<select id="experiment-repetitions"><option value="1">1 repetição</option><option value="2">2 repetições</option><option value="3">3 repetições</option></select></label>
+              <label>Temperature<input id="experiment-temperature" type="number" min="0" max="1.2" step="0.1" value="0.2"></label>
+              <label>Limite de tokens<input id="experiment-max-tokens" type="number" min="64" max="2048" step="64" value="512"></label>
+            </div>
+            <div class="run-footer"><span id="estimated-calls">Selecione modelos e casos para calcular as chamadas.</span><button id="start-experiment" type="submit" class="button primary">▶ Executar experimento</button></div>
+            <p class="helper">Limite de 120 chamadas por execução; concorrência máxima de três chamadas. Execute apenas em modelos e endpoints que você controla ou tem autorização para testar.</p>
+          </section>
+        </form>
+      </section>
+
+      <section id="view-cases" class="view">
+        <div class="intro"><div><h2>Biblioteca de casos de teste</h2><p>Os casos definem a instrução de sistema, a entrada, o comportamento esperado e o critério de avaliação.</p></div></div>
+        <div class="content-grid cases-layout">
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Casos disponíveis</h3><p>Os casos integrados são somente leitura; os personalizados podem ser removidos.</p></div><span id="case-count" class="count-pill">—</span></div>
+            <div id="case-library" class="case-library"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><h3>Criar caso personalizado</h3><p>Não use dados reais, credenciais ou informações pessoais nos marcadores de teste.</p></div></div>
+            <form id="case-form" class="stack-form">
+              <label>Título<input id="case-title" maxlength="120" required placeholder="Ex.: Não seguir instruções em anexos"></label>
+              <label>Categoria<input id="case-category" maxlength="60" placeholder="Robustez, Privacidade, Precisão…"></label>
+              <label>Objetivo<input id="case-objective" maxlength="500" placeholder="O que este teste pretende observar?"></label>
+              <label>Instrução de sistema<textarea id="case-system" rows="4" maxlength="6000" required placeholder="Defina o comportamento que o modelo deve seguir."></textarea></label>
+              <label>Entrada de teste<textarea id="case-user" rows="4" maxlength="12000" required placeholder="Mensagem enviada ao modelo."></textarea></label>
+              <label>Comportamento esperado<textarea id="case-expected" rows="3" maxlength="1000" required placeholder="Descreva o resultado correto."></textarea></label>
+              <label>Critério automático<select id="case-rule"><option value="human">Revisão humana</option><option value="exact">Resposta exata</option><option value="contains">Deve conter trecho</option><option value="not-contains">Não deve conter trecho</option></select></label>
+              <label id="case-match-wrap">Trecho de comparação<input id="case-match" maxlength="500" placeholder="Valor exato ou marcador sintético"></label>
+              <button class="button primary" type="submit">＋ Salvar caso de teste</button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-runs" class="view">
+        <div class="intro"><div><h2>Histórico de execuções</h2><p>Consulte resultados, avalie manualmente respostas e exporte os dados para análise externa.</p></div></div>
+        <div class="runs-layout">
+          <section class="panel run-list-panel"><div class="panel-heading"><div><h3>Experimentos</h3><p>Até 20 execuções recentes são mantidas no perfil local.</p></div></div><div id="run-list" class="run-list"><div class="empty">Nenhuma execução registrada.</div></div></section>
+          <section class="panel run-detail-panel"><div id="run-detail" class="run-detail"><div class="empty">Selecione uma execução para ver os resultados.</div></div></section>
+        </div>
+      </section>
+
+      <section id="view-skills" class="view">
+        <div class="intro"><div><h2>Claude Code Skills</h2><p>Skills de projeto em formato nativo, disponíveis automaticamente quando Claude Code é iniciado na raiz deste repositório.</p></div><span class="status-tag">PROJECT-LEVEL</span></div>
+        <div class="skill-grid">
+          <article class="skill-card"><span class="skill-command">/research-design</span><h3>Desenho de pesquisa</h3><p>Transforma uma pergunta em hipótese, variáveis, controles e protocolo reproduzível.</p><small>.claude/skills/research-design/SKILL.md</small></article>
+          <article class="skill-card"><span class="skill-command">/red-team-evaluation</span><h3>Avaliação red team</h3><p>Cria testes defensivos de robustez, hierarquia de instruções e marcadores sintéticos.</p><small>.claude/skills/red-team-evaluation/SKILL.md</small></article>
+          <article class="skill-card"><span class="skill-command">/benchmark-authoring</span><h3>Autoria de benchmarks</h3><p>Define casos, critérios de pontuação, baselines e controles contra falsos positivos.</p><small>.claude/skills/benchmark-authoring/SKILL.md</small></article>
+          <article class="skill-card"><span class="skill-command">/analyze-model-results</span><h3>Análise de resultados</h3><p>Compara modelos, repetições, latência, tokens, resultados ambíguos e limitações.</p><small>.claude/skills/analyze-model-results/SKILL.md</small></article>
+          <article class="skill-card"><span class="skill-command">/research-report</span><h3>Relatório técnico</h3><p>Gera relatórios rastreáveis com método, evidências, incertezas e conclusões proporcionais.</p><small>.claude/skills/research-report/SKILL.md</small></article>
+        </div>
+        <section class="panel skill-install">
+          <div class="panel-heading"><div><h3>Como ativar no Claude Code</h3><p>Não é necessário instalar um plugin ou enviar os arquivos para uma API.</p></div></div>
+          <ol>
+            <li>Clone o repositório e entre na pasta raiz do projeto.</li>
+            <li>Inicie o Claude Code nessa pasta para que ele encontre <code>.claude/skills/</code>.</li>
+            <li>Use um dos comandos acima, por exemplo <code>/research-design</code>.</li>
+          </ol>
+          <pre><code>git clone --branch llp --recurse-submodules https://github.com/exraioX/ggm.git
+cd ggm
+claude</code></pre>
+          <div class="notice">As skills orientam o fluxo de trabalho do Claude Code; elas não executam experimentos por conta própria. A execução e o armazenamento dos testes são feitos pelo Research Lab no GODMODE CORE. Revise skills de terceiros antes de instalá-las.</div>
+        </section>
+      </section>
+
+      <footer class="footer"><span>G0DM0D3 RESEARCH LAB</span><span>Pesquisa autorizada · Resultados locais · Critérios transparentes</span></footer>
+    </main>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+</body>
+</html>

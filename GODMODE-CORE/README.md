@@ -147,3 +147,19 @@ O GODMODE CORE funciona sem iniciar o G0DM0D3 e mantém suas próprias conversas
 - Sandbox forte de processos MCP.
 
 Esses itens ficam explícitos para não confundir configuração ou descoberta de ferramentas com integração funcional já validada.
+
+
+## Research Lab e Skills do Claude Code
+
+O Research Lab fica em \`http://127.0.0.1:8765/research.html\` e reutiliza os provedores configurados na aba **Provedores de IA**. Ele executa testes controlados em até seis modelos, com até três repetições por caso e limite de 120 chamadas por execução. Resultados, prompts usados, respostas, latência, uso de tokens e avaliações humanas ficam em \`~/.godmode/research.json\`.
+
+Consulte [docs/RESEARCH-LAB.md](docs/RESEARCH-LAB.md) para escopo, API, limites e privacidade.
+
+O repositório também inclui Skills nativas do Claude Code em \`.claude/skills/\`:
+- \`/research-design\`
+- \`/red-team-evaluation\`
+- \`/benchmark-authoring\`
+- \`/analyze-model-results\`
+- \`/research-report\`
+
+Inicie Claude Code na raiz do repositório com \`claude\`. Consulte [docs/CLAUDE-CODE-SKILLS.md](docs/CLAUDE-CODE-SKILLS.md). Essa integração é compatibilidade de Skills em nível de projeto; não é uma cópia completa do ECC e não injeta Skills no runtime do GODMODE CORE.
