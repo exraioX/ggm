@@ -32,6 +32,7 @@ export interface WorkflowStep {
 export interface WorkflowOptions {
   role?: SpecialistRole | 'auto';
   providerId?: string;
+  model?: string;
   projectName?: string;
   onStepUpdate?: (step: WorkflowStep, index: number, total: number, workflowId: string) => void;
 }
@@ -244,7 +245,8 @@ export class MultiAgentOrchestrator {
     const normalizedTask = task.trim();
     if (!normalizedTask) throw new Error('Informe uma tarefa para o workflow.');
 
-    const enabledProviders = providerRegistry.list().filter(provider => provider.enabled !== false && provider.model.trim());
+    const requestedModel = typeof options.model === 'string' ? options.model.trim().slice(0, 200) : '';
+    const enabledProviders = providerRegistry.list().filter(provider => provider.enabled !== false && (requestedModel || provider.model.trim()));
     const provider = options.providerId
       ? enabledProviders.find(item => item.id === options.providerId)
       : enabledProviders[0];
@@ -284,7 +286,7 @@ export class MultiAgentOrchestrator {
 
       try {
         const response = await client.chat.completions.create({
-          model: provider.model,
+          model: requestedModel || provider.model,
           messages: [
             { role: 'system', content: specialist.systemPrompt },
             { role: 'user', content: prompt },
